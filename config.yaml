@@ -1,0 +1,33 @@
+outpath:
+    /groups/hachgrp/projects/dev-ltr-simulator/analysis/ltr-sim-dev
+
+samples:
+    P000S000:
+        - /groups/hachgrp/projects/ana-22rv1/raw-data/wts/fastq/P000R000/P000R000.pass.fastq
+        - /groups/hachgrp/projects/ana-22rv1/raw-data/wts/fastq/P000R001/P000R001.pass.fastq
+        - /groups/hachgrp/projects/ana-22rv1/raw-data/wts/fastq/P000R002/P000R002.pass.fastq
+    # P001S000:
+    #     - /groups/hachgrp/projects/dev-ont/raw-data/wts/fastq/P001R410/P001R410.pass.fastq
+    #     - /groups/hachgrp/projects/dev-ont/raw-data/wts/fastq/P001R411/P001R411.pass.fastq
+    #     - /groups/hachgrp/projects/dev-ont/raw-data/wts/fastq/P001R510/P001R510.pass.fastq
+    #     - /groups/hachgrp/projects/dev-ont/raw-data/wts/fastq/P001R511/P001R511.pass.fastq
+
+exec:
+    ltrsim : ./ltrsim.py
+
+mapping_settings:
+    dna  : splice
+    cdna : map-ont
+
+references:
+    dna      : /groups/hachgrp/annotations/DNA/92/Homo_sapiens.GRCh38.dna.fa
+    dna_fai  : /groups/hachgrp/annotations/DNA/92/Homo_sapiens.GRCh38.dna.fa.fai
+    cdna     : /groups/hachgrp/annotations/cDNA/92/Homo_sapiens.GRCh38.92.cdna.all.fa
+    cdna_fai : /groups/hachgrp/annotations/cDNA/92/Homo_sapiens.GRCh38.92.cdna.all.fa.fai
+
+annotations:
+    gtf : /groups/hachgrp/annotations/GTF/92/Homo_sapiens.GRCh38.92.gtf
+
+badread:
+    url : https://github.com/rrwick/Badread.git
+    tag : v0.1.5
