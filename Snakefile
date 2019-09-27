@@ -21,6 +21,7 @@ rule all:
     input:
         expand('{}/{{sample}}.cdna.fasta'.format(reads_d), sample=config['samples']),
         expand('{}/{{sample}}.cdna.reads.fastq'.format(reads_d), sample=config['samples']),
+        expand('{}/{{sample}}.cdna.reads.tsv'.format(reads_d), sample=config['samples']),
 
 
 rule git_badread:
@@ -76,9 +77,8 @@ rule sim_transcriptome:
         for line in open(input.exp):
             line = line.rstrip().split('\t')
             tid = line[0]
-            cnt = line[1]
+            cnt = int(line[1])
             tid_to_rcnt[tid] = cnt
-        # print(tid_to_rcnt)
         outfile = open(output.cdna, 'w+')
         for line in open(input.cdna):
             line = line.rstrip()
@@ -87,10 +87,12 @@ rule sim_transcriptome:
                 line = line.split()
                 tid = line[0].split('.')[0]
                 cnt = tid_to_rcnt.get(tid, 0)
-                record = [tid, 'depth={}'.format(cnt)] + line[1:]
-                print('>{}'.format(' '.join(record)), file=outfile)
+                if cnt > 0:
+                    record = [tid, 'depth={}'.format(max(cnt,0))] + line[1:]
+                    print('>{}'.format(' '.join(record)), file=outfile)
             else:
-                print(line, file=outfile)
+                if cnt > 0:
+                    print(line, file=outfile)
         outfile.close()
 
 rule generate_reads:
@@ -100,13 +102,98 @@ rule generate_reads:
         badread = 'extern/Badread/badread-runner.py',
         cdna    = '{}/{{sample}}.cdna.fasta'.format(reads_d),
     output:
-        fastq   = '{}/{{sample}}.cdna.reads.fastq'.format(reads_d),
+        fastq_gz   = '{}/{{sample}}.cdna.reads.fastq.gz'.format(reads_d),
     shell:
-        '{input.badread} simulate --seed 42 --length 100000,0 --reference {input.cdna} --quantity 1x | gzip > {output.fastq}'
+        '{input.badread} simulate --seed 42 --length 100000,0 --reference {input.cdna} --quantity 1x | gzip > {output.fastq_gz}'
 
+rule decompress_reads:
+    input:
+        fastq_gz = '{}/{{sample}}.cdna.reads.fastq.gz'.format(reads_d),
+    output:
+        fastq    = '{}/{{sample}}.cdna.reads.fastq'.format(reads_d),
+    shell:
+        'zcat {input.fastq_gz} > {output.fastq}'
 
+rule reads_info:
+    input:
+        fastq = '{}/{{sample}}.cdna.reads.fastq'.format(reads_d),
+        gtf   = config['annotations']['gtf'],
+    output:
+        tsv   = '{}/{{sample}}.cdna.reads.tsv'.format(reads_d),
+    run:
+        t_headers = [
+            'gene_id',
+            'transcript_id',
+            'gene_name',
+        ]
+        tid_to_info = dict(
+            non={f:'NA' for f in t_headers}
+        )
+        for line in open(input.gtf):
+            if line[0] == '#':
+                continue
+            line = line.rstrip()
+            line = line.split('\t')
+            if line[2] != 'transcript':
+                continue
+            info = {x.split()[0] : x.split()[1].strip('"') for x in line[8].strip('; ').split(';')}
+            tid_to_info[info['transcript_id']] = {f:info[f] for f in t_headers}
+        r_headers = [
+            'read_id',
+            'strand',
+            'start',
+            'end',
+            'length',
+            'error-free_length',
+            'read_identity',
+            'type',
+            'chimera'
+        ]
+        outfile = open(output.tsv, 'w+')
+        print('\t'.join(t_headers + r_headers), file=outfile)
+        for line in open(input.fastq):
+            if line[0] != '@':
+                continue
+            line = line.rstrip()
+            line = line.split()
+            rid_info = {x:'NA' for x in r_headers}
+            rid_info['type'] = 'normal'
 
+            field = line[0]
+            rid_info['read_id'] = field[1:]
 
+            line = line[1:]
+            field = line[0]
+            if field in ['junk_seq', 'random_seq']:
+                tid = 'non'
+                rid_info['type'] = field
+            else:
+                field = field.split(',')
+                tid                = field[0]
+                rid_info['strand'] = field[1][0]
+                rid_info['start']  = field[2].split('-')[0]
+                rid_info['end']    = field[2].split('-')[0]
+            while line[1] == 'chimera':
+                if rid_info['chimera'] == 'NA':
+                    rid_info['chimera'] = ''
+                line = line[2:]
+                rid_info['chimera'] += '{};'.format(line[0])
+                rid_info['type']    += ';chimera'
+            try:
+                assert(len(line) == 4)
+            except Exception:
+                print(line)
+                assert(len(line) == 4)
+            while len(line)>1:
+                line = line[1:]
+                field = line[0]
+                field = field.split('=')
+                rid_info[field[0]] = field[1]
+            out_line = list()
+            out_line.extend([tid_to_info[tid][h] for h in t_headers])
+            out_line.extend([rid_info[h] for h in r_headers])
+            print('\t'.join(out_line), file=outfile)
+        outfile.close()
 
 
 

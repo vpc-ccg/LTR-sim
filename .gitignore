@@ -1,5 +1,7 @@
 # Project specific
 extern/Badread
+slurm/
+.snakemake/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -31,3 +31,6 @@ annotations:
 badread:
     url : https://github.com/rrwick/Badread.git
     tag : v0.1.5
+
+annotations:
+    gtf : /groups/hachgrp/annotations/GTF/92/Homo_sapiens.GRCh38.92.gtf
