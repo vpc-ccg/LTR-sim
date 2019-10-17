@@ -17,7 +17,15 @@ genes:
     - ENSG00000187838 # PLSCR3
 
 exec:
-    ltrsim : ./ltrsim.py
+    ltrsim  : ./ltrsim.py
+    polyA   : scripts/polyA.py
+    badread : extern/Badread/badread-runner.py
+
+polyA_config:
+    mean : 60
+    stddev : 20
+    mincut : 20
+    maxcut : 150
 
 mapping_settings:
     dna  : splice
@@ -35,6 +43,7 @@ annotations:
 badread:
     url : https://github.com/rrwick/Badread.git
     tag : v0.1.5
-
+    coverage : 30x
+    
 annotations:
     gtf : /groups/hachgrp/annotations/GTF/92/Homo_sapiens.GRCh38.92.gtf

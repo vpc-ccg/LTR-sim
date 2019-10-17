@@ -19,9 +19,9 @@ reads_d = '{}/reads'.format(outpath)
 
 rule all:
     input:
-        expand('{}/{{sample}}.cdna.fasta'.format(reads_d), sample=config['samples']),
-        expand('{}/{{sample}}.cdna.reads.fastq'.format(reads_d), sample=config['samples']),
-        expand('{}/{{sample}}.cdna.reads.tsv'.format(reads_d), sample=config['samples']),
+        expand('{}/{{sample}}.cdna.polyA.fasta'.format(reads_d), sample=config['samples']),
+        expand('{}/{{sample}}.cdna.polyA.reads.fastq'.format(reads_d), sample=config['samples']),
+        expand('{}/{{sample}}.cdna.polyA.reads.tsv'.format(reads_d), sample=config['samples']),
 
 
 rule git_badread:
@@ -105,31 +105,50 @@ rule sim_transcriptome:
                     print(line, file=outfile)
         outfile.close()
 
+rule add_poly_A:
+    conda:
+        'conda.env'
+    input:
+        polyA = config['exec']['polyA'],
+        cdna  = '{}/{{sample}}.cdna.fasta'.format(reads_d),
+    output:
+        cdna_A = '{}/{{sample}}.cdna.polyA.fasta'.format(reads_d)
+    params:
+        mean   = config['polyA_config']['mean'],
+        stddev = config['polyA_config']['stddev'],
+        mincut = config['polyA_config']['mincut'],
+        maxcut = config['polyA_config']['maxcut'],
+    shell:
+        'python {input.polyA} {input.cdna} {output.cdna_A} {params.mean} {params.stddev} {params.mincut} {params.maxcut}'
+
+
 rule generate_reads:
     conda:
         'conda.env'
     input:
-        badread = 'extern/Badread/badread-runner.py',
-        cdna    = '{}/{{sample}}.cdna.fasta'.format(reads_d),
+        badread = config['exec']['badread'],
+        cdna_A = '{}/{{sample}}.cdna.polyA.fasta'.format(reads_d)
     output:
-        fastq_gz   = '{}/{{sample}}.cdna.reads.fastq.gz'.format(reads_d),
+        fastq_gz   = '{}/{{sample}}.cdna.polyA.reads.fastq.gz'.format(reads_d),
+    params:
+        coverage = config['badread']['coverage']
     shell:
-        '{input.badread} simulate --seed 42 --length 100000,0 --reference {input.cdna} --quantity 1x | gzip > {output.fastq_gz}'
+        '{input.badread} simulate --seed 42 --length 100000,0 --reference {input.cdna_A} --quantity {params.coverage} | gzip > {output.fastq_gz}'
 
 rule decompress_reads:
     input:
-        fastq_gz = '{}/{{sample}}.cdna.reads.fastq.gz'.format(reads_d),
+        fastq_gz = '{}/{{sample}}.cdna.polyA.reads.fastq.gz'.format(reads_d),
     output:
-        fastq    = '{}/{{sample}}.cdna.reads.fastq'.format(reads_d),
+        fastq    = '{}/{{sample}}.cdna.polyA.reads.fastq'.format(reads_d),
     shell:
         'zcat {input.fastq_gz} > {output.fastq}'
 
 rule reads_info:
     input:
-        fastq = '{}/{{sample}}.cdna.reads.fastq'.format(reads_d),
+        fastq = '{}/{{sample}}.cdna.polyA.reads.fastq'.format(reads_d),
         gtf   = config['annotations']['gtf'],
     output:
-        tsv   = '{}/{{sample}}.cdna.reads.tsv'.format(reads_d),
+        tsv   = '{}/{{sample}}.cdna.polyA.reads.tsv'.format(reads_d),
     run:
         t_headers = [
             'gene_id',
