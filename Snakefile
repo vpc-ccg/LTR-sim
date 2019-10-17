@@ -74,6 +74,7 @@ rule sim_transcriptome:
         cdna = '{}/{{sample}}.cdna.fasta'.format(reads_d)
     run:
         tid_to_rcnt = dict()
+        genes = set(config['genes'])
         for line in open(input.exp):
             line = line.rstrip().split('\t')
             tid = line[0]
@@ -83,6 +84,15 @@ rule sim_transcriptome:
         for line in open(input.cdna):
             line = line.rstrip()
             if line[0] == '>':
+                gene_name_field_name = 'gene:'
+                gene_name_field_sepa = '.'
+                gene_name = line[line.find(gene_name_field_name):]
+                gene_name = gene_name[len(gene_name_field_name) : gene_name.find(gene_name_field_sepa)]
+                if not gene_name in genes:
+                    flag = False
+                    continue
+                flag = True
+                print(gene_name)
                 line = line[1:]
                 line = line.split()
                 tid = line[0].split('.')[0]
@@ -90,7 +100,7 @@ rule sim_transcriptome:
                 if cnt > 0:
                     record = [tid, 'depth={}'.format(max(cnt,0))] + line[1:]
                     print('>{}'.format(' '.join(record)), file=outfile)
-            else:
+            elif flag:
                 if cnt > 0:
                     print(line, file=outfile)
         outfile.close()
