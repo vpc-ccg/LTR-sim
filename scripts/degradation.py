@@ -3,6 +3,7 @@ import numpy as np
 import copy as cp
 from random import choices
 from collections import Counter
+from math import ceil
 
 def write_new_variation(header, seq, fout, ls=60):
 	fout.write(header)
@@ -15,7 +16,7 @@ def write_new_variation(header, seq, fout, ls=60):
 		else:
 			fout.write(seq[i:])
 		fout.write('\n')
-		
+
 		i += ls
 
 
@@ -34,21 +35,38 @@ def split_number(num, part):
 	return final
 
 def sample_with_replacement(seq_len, slope, intercept, depth, points=1000):
+	if seq_len > 10000:
+		slope //= 1
+	elif 75000 > seq_len > 5000:
+		slope //= 1.5
+	elif 5000 > seq_len > 3000:
+		slope //= 3
+	elif 3000 > seq_len > 1500:
+		slope //= 6
+	elif 1500 > seq_len > 0:
+		slope //= 10
 	all_lens = []
 	cur_len = seq_len
 	for i in range(points):
+		if i % 2 == 0:
+			percentage = cur_len/seq_len
+			print('{:6.2f}% {:5}nt: {}'.format(percentage*100, cur_len, '*'*ceil(50*percentage)))
+		# print('-'*200*int())
 		all_lens.append(cur_len)
-
-		cur_len -= slope
-		if cur_len < intercept:
-			cur_len = intercept
+		cur_len = max(intercept, cur_len - slope)
 
 	lens = choices(all_lens, k=depth)
 	return lens
 
 def degrade(header, seq, slope, intercept, fout):
 	header_list = header.strip().split()
-	depth = int(header_list[1].split('=')[1])
+	depth = None
+	for field in header_list:
+		if 'depth=' in field:
+			depth = int(field.split('=')[1])
+			break
+	if depth == None:
+		raise Exception('Contig with header <{}> does not have depth comment'.format(header))
 
 	seq_len = len(seq)
 
@@ -87,7 +105,7 @@ def process_all(trans_in, trans_out, slope, intercept):
 				header = l
 			else:
 				seq += l.strip()
-	
+
 	degrade(header, seq, slope, intercept, fout)
 
 def usage():
@@ -95,6 +113,7 @@ def usage():
 
 def main():
 	print('This script generates degraded variations of the given transcripts')
+	print(sys.argv)
 	args = sys.argv[1:]
 
 	if len(args) != 4:

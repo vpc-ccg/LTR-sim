@@ -19,9 +19,9 @@ reads_d = '{}/reads'.format(outpath)
 
 rule all:
     input:
-        expand('{}/{{sample}}.cdna.polyA.fasta'.format(reads_d), sample=config['samples']),
-        expand('{}/{{sample}}.cdna.polyA.reads.fastq'.format(reads_d), sample=config['samples']),
-        expand('{}/{{sample}}.cdna.polyA.reads.tsv'.format(reads_d), sample=config['samples']),
+        expand('{}/{{sample}}.cdna.polyA.degraded.fasta'.format(reads_d), sample=config['samples']),
+        expand('{}/{{sample}}.cdna.polyA.degraded.reads.fastq'.format(reads_d), sample=config['samples']),
+        expand('{}/{{sample}}.cdna.polyA.degraded.reads.tsv'.format(reads_d), sample=config['samples']),
 
 
 rule git_badread:
@@ -53,6 +53,7 @@ rule expression_rate:
     output:
         exp = '{}/{{sample}}.expression_rate.tsv'.format(train_d)
     run:
+        print('Capturing expression rate from: {}'.format(input.paf))
         tid_to_rcnt = dict()
         for idx,line in enumerate(open(input.paf)):
             if idx % 100000 == 0:
@@ -73,6 +74,7 @@ rule sim_transcriptome:
     output:
         cdna = '{}/{{sample}}.cdna.fasta'.format(reads_d)
     run:
+        print('Simulating transcriptome from {}'.format(input))
         tid_to_rcnt = dict()
         genes = set(config['genes'])
         for line in open(input.exp):
@@ -121,35 +123,49 @@ rule add_poly_A:
     shell:
         'python {input.polyA} {input.cdna} {output.cdna_A} {params.mean} {params.stddev} {params.mincut} {params.maxcut}'
 
+rule degrade:
+    conda:
+        'conda.env'
+    input:
+        degrade = config['exec']['degrade'],
+        cdna_A = '{}/{{sample}}.cdna.polyA.fasta'.format(reads_d)
+    output:
+        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded.fasta'.format(reads_d)
+    params:
+        slope     = config['degrade_config']['slope'],
+        intercept = config['degrade_config']['intercept'],
+    shell:
+        'python {input.degrade} {input.cdna_A} {output.cdna_A_degraded} {params.slope} {params.intercept}'
 
 rule generate_reads:
     conda:
         'conda.env'
     input:
         badread = config['exec']['badread'],
-        cdna_A = '{}/{{sample}}.cdna.polyA.fasta'.format(reads_d)
+        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded.fasta'.format(reads_d)
     output:
-        fastq_gz   = '{}/{{sample}}.cdna.polyA.reads.fastq.gz'.format(reads_d),
+        fastq_gz   = '{}/{{sample}}.cdna.polyA.degraded.reads.fastq.gz'.format(reads_d),
     params:
         coverage = config['badread']['coverage']
     shell:
-        '{input.badread} simulate --seed 42 --length 100000,0 --reference {input.cdna_A} --quantity {params.coverage} | gzip > {output.fastq_gz}'
+        '{input.badread} simulate --seed 42 --length 100000,0 --reference {input.cdna_A_degraded} --quantity {params.coverage} | gzip > {output.fastq_gz}'
 
 rule decompress_reads:
     input:
-        fastq_gz = '{}/{{sample}}.cdna.polyA.reads.fastq.gz'.format(reads_d),
+        fastq_gz   = '{}/{{sample}}.cdna.polyA.degraded.reads.fastq.gz'.format(reads_d),
     output:
-        fastq    = '{}/{{sample}}.cdna.polyA.reads.fastq'.format(reads_d),
+        fastq    = '{}/{{sample}}.cdna.polyA.degraded.reads.fastq'.format(reads_d),
     shell:
         'zcat {input.fastq_gz} > {output.fastq}'
 
 rule reads_info:
     input:
-        fastq = '{}/{{sample}}.cdna.polyA.reads.fastq'.format(reads_d),
+        fastq    = '{}/{{sample}}.cdna.polyA.degraded.reads.fastq'.format(reads_d),
         gtf   = config['annotations']['gtf'],
     output:
-        tsv   = '{}/{{sample}}.cdna.polyA.reads.tsv'.format(reads_d),
+        tsv   = '{}/{{sample}}.cdna.polyA.degraded.reads.tsv'.format(reads_d),
     run:
+        print('Parsing read information from {}'.format(input))
         t_headers = [
             'gene_id',
             'transcript_id',
@@ -198,7 +214,7 @@ rule reads_info:
                 rid_info['type'] = field
             else:
                 field = field.split(',')
-                tid                = field[0]
+                tid                = field[0].split('_')[0]
                 rid_info['strand'] = field[1][0]
                 rid_info['start']  = field[2].split('-')[0]
                 rid_info['end']    = field[2].split('-')[0]
