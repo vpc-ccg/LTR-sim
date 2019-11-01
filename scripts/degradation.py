@@ -83,7 +83,8 @@ def degrade(header, seq, slope, intercept, fout):
 		new_header_list[1] = '{} offset={}'.format(new_depth, -1*(seq_len - length))
 		new_header = ' '.join(new_header_list)
 
-		new_seq = seq[ : length]
+		degradation_length = len(seq) - length
+		new_seq = seq[degradation_length : ]
 		write_new_variation(new_header, new_seq, fout)
 		i += 1
 
