@@ -1,5 +1,4 @@
 # Project specific
-extern/Badread
 slurm/
 .snakemake/
 
