@@ -19,8 +19,7 @@ reads_d = '{}/reads'.format(outpath)
 
 rule all:
     input:
-        expand('{}/{{sample}}.cdna.polyA.degraded.fasta'.format(reads_d), sample=config['samples']),
-        expand('{}/{{sample}}.cdna.polyA.degraded.reads.fastq'.format(reads_d), sample=config['samples']),
+        expand('{}/{{sample}}.cdna.polyA.degraded.reads.renamed.fastq'.format(reads_d), sample=config['samples']),
         expand('{}/{{sample}}.cdna.polyA.degraded.reads.tsv'.format(reads_d), sample=config['samples']),
 
 
@@ -98,7 +97,7 @@ rule sim_transcriptome:
                 line = line[1:]
                 line = line.split()
                 tid = line[0].split('.')[0]
-                cnt = tid_to_rcnt.get(tid, 0)
+                cnt = tid_to_rcnt.get(tid, 0) + 1
                 if cnt > 0:
                     record = [tid, 'depth={}'.format(max(cnt,0))] + line[1:]
                     print('>{}'.format(' '.join(record)), file=outfile)
@@ -132,8 +131,8 @@ rule degrade:
     output:
         cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded.fasta'.format(reads_d)
     params:
-        slope     = config['degrade_config']['slope'],
-        intercept = config['degrade_config']['intercept'],
+        slope     = 0, #config['degrade_config']['slope'],
+        intercept = 0, #config['degrade_config']['intercept'],
     shell:
         'python {input.degrade} {input.cdna_A} {output.cdna_A_degraded} {params.slope} {params.intercept}'
 
@@ -148,7 +147,9 @@ rule generate_reads:
     params:
         coverage = config['badread']['coverage']
     shell:
-        '{input.badread} simulate --seed 42 --length 100000,0 --reference {input.cdna_A_degraded} --quantity {params.coverage} | gzip > {output.fastq_gz}'
+        '{input.badread} simulate --seed 42 --length 100000,0'
+        '   --reference {input.cdna_A_degraded} --quantity {params.coverage} --chimeras 0 --random_reads 0 --junk_reads 0'
+        '   | gzip > {output.fastq_gz}'
 
 rule decompress_reads:
     input:
@@ -164,6 +165,7 @@ rule reads_info:
         gtf   = config['annotations']['gtf'],
     output:
         tsv   = '{}/{{sample}}.cdna.polyA.degraded.reads.tsv'.format(reads_d),
+        fastq = '{}/{{sample}}.cdna.polyA.degraded.reads.renamed.fastq'.format(reads_d),
     run:
         print('Parsing read information from {}'.format(input))
         t_headers = [
@@ -194,9 +196,17 @@ rule reads_info:
             'type',
             'chimera'
         ]
-        outfile = open(output.tsv, 'w+')
-        print('\t'.join(t_headers + r_headers), file=outfile)
+        out_tsv   = open(output.tsv, 'w+')
+        out_fastq = open(output.fastq, 'w+')
+        rid = 0
+        print('\t'.join(t_headers + r_headers), file=out_tsv)
         for line in open(input.fastq):
+            if line[0] == '@':
+                tid = line.split()[1].split(',')[0]
+                print('@{}_{:08d}'.format(tid, rid), file=out_fastq)
+                rid+=1
+            else:
+                print(line, end='', file=out_fastq)
             if line[0] != '@':
                 continue
             line = line.rstrip()
@@ -237,18 +247,6 @@ rule reads_info:
             out_line = list()
             out_line.extend([tid_to_info[tid][h] for h in t_headers])
             out_line.extend([rid_info[h] for h in r_headers])
-            print('\t'.join(out_line), file=outfile)
-        outfile.close()
-
-
-
-
-
-
-
-
-
-
-
-
-#
+            print('\t'.join(out_line), file=out_tsv)
+        out_fastq.close()
+        out_tsv.close()
