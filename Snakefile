@@ -19,9 +19,10 @@ reads_d = '{}/reads'.format(outpath)
 
 rule all:
     input:
-        expand('{}/{{sample}}.cdna.polyA.degraded.reads.renamed.fastq'.format(reads_d), sample=config['samples']),
-        expand('{}/{{sample}}.cdna.polyA.degraded.reads.tsv'.format(reads_d), sample=config['samples']),
-
+        expand('{}/{{sample}}.L-{{degradation_level}}.fastq'.format(reads_d),
+               sample=config['samples'],
+               degradation_level=config['degradation_level'],)
+               # out_file=['reads.tsv', 'renamed.fastq']),
 
 rule git_badread:
     output:
@@ -89,7 +90,7 @@ rule sim_transcriptome:
                 gene_name_field_sepa = '.'
                 gene_name = line[line.find(gene_name_field_name):]
                 gene_name = gene_name[len(gene_name_field_name) : gene_name.find(gene_name_field_sepa)]
-                if not gene_name in genes:
+                if not ('All_genes' in genes or gene_name in genes):
                     flag = False
                     continue
                 flag = True
@@ -129,10 +130,10 @@ rule degrade:
         degrade = config['exec']['degrade'],
         cdna_A = '{}/{{sample}}.cdna.polyA.fasta'.format(reads_d)
     output:
-        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded.fasta'.format(reads_d)
+        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d)
     params:
-        slope     = 0, #config['degrade_config']['slope'],
-        intercept = 0, #config['degrade_config']['intercept'],
+        intercept = lambda wildcards: config['degradation_level'][wildcards.degradation_level]['intercept'],
+        slope     = lambda wildcards: config['degradation_level'][wildcards.degradation_level]['slope'],
     shell:
         'python {input.degrade} {input.cdna_A} {output.cdna_A_degraded} {params.slope} {params.intercept}'
 
@@ -141,31 +142,25 @@ rule generate_reads:
         'conda.env'
     input:
         badread = config['exec']['badread'],
-        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded.fasta'.format(reads_d)
+        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d)
     output:
-        fastq_gz   = '{}/{{sample}}.cdna.polyA.degraded.reads.fastq.gz'.format(reads_d),
+        fastq   = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.reads.fastq'.format(reads_d),
     params:
-        coverage = config['badread']['coverage']
+        coverage = config['badread']['coverage'],
+        seed     = config['badread']['seed'],
     shell:
-        '{input.badread} simulate --seed 42 --length 100000,0'
-        '   --reference {input.cdna_A_degraded} --quantity {params.coverage} --chimeras 0 --random_reads 0 --junk_reads 0'
-        '   | gzip > {output.fastq_gz}'
-
-rule decompress_reads:
-    input:
-        fastq_gz   = '{}/{{sample}}.cdna.polyA.degraded.reads.fastq.gz'.format(reads_d),
-    output:
-        fastq    = '{}/{{sample}}.cdna.polyA.degraded.reads.fastq'.format(reads_d),
-    shell:
-        'zcat {input.fastq_gz} > {output.fastq}'
+        'PYTHONHASHSEED=0 {input.badread} simulate --seed {params.seed} --length 100000,0'
+        '   --reference {input.cdna_A_degraded} --quantity {params.coverage}'
+        '   --chimeras 0 --random_reads 0 --junk_reads 0 --glitches 0,0,0'
+        '   > {output.fastq}'
 
 rule reads_info:
     input:
-        fastq    = '{}/{{sample}}.cdna.polyA.degraded.reads.fastq'.format(reads_d),
+        fastq   = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.reads.fastq'.format(reads_d),
         gtf   = config['annotations']['gtf'],
     output:
-        tsv   = '{}/{{sample}}.cdna.polyA.degraded.reads.tsv'.format(reads_d),
-        fastq = '{}/{{sample}}.cdna.polyA.degraded.reads.renamed.fastq'.format(reads_d),
+        tsv   = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.reads.tsv'.format(reads_d),
+        fastq = '{}/{{sample}}.L-{{degradation_level}}.fastq'.format(reads_d),
     run:
         print('Parsing read information from {}'.format(input))
         t_headers = [
