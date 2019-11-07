@@ -83,9 +83,13 @@ rule sim_transcriptome:
             cnt = int(line[1])
             tid_to_rcnt[tid] = cnt
         outfile = open(output.cdna, 'w+')
+        seq=list()
         for line in open(input.cdna):
             line = line.rstrip()
             if line[0] == '>':
+                if len(seq) > 0:
+                    print(''.join(seq), file=outfile)
+                    seq = list()
                 gene_name_field_name = 'gene:'
                 gene_name_field_sepa = '.'
                 gene_name = line[line.find(gene_name_field_name):]
@@ -99,12 +103,12 @@ rule sim_transcriptome:
                 line = line.split()
                 tid = line[0].split('.')[0]
                 cnt = tid_to_rcnt.get(tid, 0) + 1
-                if cnt > 0:
-                    record = [tid, 'depth={}'.format(max(cnt,0))] + line[1:]
-                    print('>{}'.format(' '.join(record)), file=outfile)
+                record = [tid, 'depth={}'.format(max(cnt,0))] + line[1:]
+                print('>{}'.format(' '.join(record)), file=outfile)
             elif flag:
-                if cnt > 0:
-                    print(line, file=outfile)
+                seq.append(line)
+        if len(seq) > 0:
+            print(''.join(seq), file=outfile)
         outfile.close()
 
 rule add_poly_A:
@@ -120,8 +124,13 @@ rule add_poly_A:
         stddev = config['polyA_config']['stddev'],
         mincut = config['polyA_config']['mincut'],
         maxcut = config['polyA_config']['maxcut'],
+        seed   = config['seed'],
     shell:
-        'python {input.polyA} {input.cdna} {output.cdna_A} {params.mean} {params.stddev} {params.mincut} {params.maxcut}'
+        'PYTHONHASHSEED=0 python {input.polyA} '
+        '   {input.cdna} {output.cdna_A}'
+        '   {params.mean} {params.stddev}'
+        '   {params.mincut} {params.maxcut}'
+        '   {params.seed}'
 
 rule degrade:
     conda:
@@ -134,23 +143,49 @@ rule degrade:
     params:
         intercept = lambda wildcards: config['degradation_level'][wildcards.degradation_level]['intercept'],
         slope     = lambda wildcards: config['degradation_level'][wildcards.degradation_level]['slope'],
+        seed      = config['seed'],
     shell:
-        'python {input.degrade} {input.cdna_A} {output.cdna_A_degraded} {params.slope} {params.intercept}'
+        'PYTHONHASHSEED=0 python {input.degrade}'
+        '   {input.cdna_A} {output.cdna_A_degraded}'
+        '   {params.slope} {params.intercept}'
+        '   {params.seed}'
+
+rule get_throughput:
+    input:
+        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d)
+    output:
+        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.cov.txt'.format(reads_d)
+    run:
+        amplified_throughput = 0.0
+        throughput = 0.0
+        for line_num,line in enumerate(open(input.cdna_A_degraded)):
+            line = line.rstrip()
+            if line_num % 2 == 0:
+                header_list = line.split()
+            	for idx,field in enumerate(header_list):
+                    if 'depth=' in field:
+                        depth = int(field.split('=')[1])
+            elif line_num % 2 == 1:
+                amplified_throughput+=len(line)*depth
+                throughput+=len(line)
+                print(len(line),depth,amplified_throughput,throughput)
+        print('{:.2f}'.format(amplified_throughput/throughput), end='', file=open(output.cdna_A_degraded_cov, 'w+'))
 
 rule generate_reads:
     conda:
         'conda.env'
     input:
         badread = config['exec']['badread'],
-        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d)
+        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d),
+        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.cov.txt'.format(reads_d)
     output:
         fastq   = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.reads.fastq'.format(reads_d),
     params:
-        coverage = config['badread']['coverage'],
-        seed     = config['badread']['seed'],
+        # coverage = config['badread']['coverage'],
+        seed     = config['seed'],
     shell:
         'PYTHONHASHSEED=0 {input.badread} simulate --seed {params.seed} --length 100000,0'
-        '   --reference {input.cdna_A_degraded} --quantity {params.coverage}'
+        '   --reference {input.cdna_A_degraded} --quantity $(cat {input.cdna_A_degraded_cov})x'
         '   --chimeras 0 --random_reads 0 --junk_reads 0 --glitches 0,0,0'
         '   > {output.fastq}'
 

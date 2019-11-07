@@ -8,16 +8,16 @@ def count_transcripts(trans_in):
 		for l in f:
 			if l[0] == '>':
 				tr_cnt += 1
-	
+
 	print('Contig count: {}'.format(tr_cnt))
 	return tr_cnt
 
 def generate_polyA_len_list(cnt, mean, std, mincut, maxcut):
 	a, b = (mincut - mean) / std, (maxcut - mean) / std
-	
+
 	lens = stats.truncnorm.rvs(a, b, loc=mean, scale=std, size=cnt, random_state=42)
 	lens = np.rint(lens).astype(int)
-	
+
 	print('Mean: {}'.format(np.mean(lens)))
 	print('STD: {}'.format(np.std(lens)))
 	print('Min: {}'.format(np.min(lens)))
@@ -25,7 +25,7 @@ def generate_polyA_len_list(cnt, mean, std, mincut, maxcut):
 
 	return lens
 
-def add_tail(seq, lsize, tail_len, line_size=60):
+def add_tail(seq, lsize, tail_len, line_size=100000000000):
 	if line_size - lsize > tail_len:
 		new_seq = seq.strip() + 'A' * tail_len + '\n'
 	else:
@@ -36,7 +36,7 @@ def add_tail(seq, lsize, tail_len, line_size=60):
 		remain_len -= line_size * full_lines_cnt
 		if remain_len > 0:
 			new_seq += 'A' * remain_len + '\n'
-		
+
 	return new_seq
 
 def add_tail_all(trans_in, trans_out, lens):
@@ -62,7 +62,7 @@ def add_tail_all(trans_in, trans_out, lens):
 			else:
 				seq += l
 				lsize = len(l.strip())
-	
+
 	#print(header.strip())
 	#print(lens[i])
 	new_seq = add_tail(seq, lsize, lens[i])
@@ -76,7 +76,7 @@ def main():
 	print('This script adds poly-A sequences to the tail of transcripts')
 	args = sys.argv[1:]
 
-	if len(args) != 6:
+	if len(args) != 7:
 		usage()
 		exit(1)
 
@@ -87,10 +87,11 @@ def main():
 		std = int(args[3])
 		mincut = int(args[4])
 		maxcut = int(args[5])
+		seed = int(args[6])
 	except ValueError as err:
 		print('Error in arguments!\n{}'.format(err))
 		exit(1)
-
+	np.random.seed(seed)
 	print('Input FASTA: {}\nOutput FASTA: {}\n(Expected) Mean: {}, std: {}, mincut: {}, maxcut: {}'.format(trans_in, trans_out, mean, std, mincut, maxcut))
 
 	tr_cnt = count_transcripts(trans_in)

@@ -1,5 +1,8 @@
 outpath:
-    /groups/hachgrp/projects/dev-ltr-simulator/analysis/ltr-sim-dev
+    /groups/hachgrp/projects/dev-ltr-simulator/analysis/ltr-sim-dev/
+
+seed:
+    42
 
 samples:
     P000S000:
@@ -27,9 +30,12 @@ exec:
 degradation_level:
     non:
         slope     : 0
-        intercept : 10000
+        intercept : 0
+    nonREP:
+        slope     : 0
+        intercept : 0
     low:
-        slope     : 10
+        slope     : 5
         intercept : 400
     high:
         slope     : 25
@@ -55,10 +61,10 @@ annotations:
     gtf : /groups/hachgrp/annotations/GTF/92/Homo_sapiens.GRCh38.92.gtf
 
 badread:
+    batches  : 1000
     url      : https://github.com/baraaorabi/Badread.git
     tag      : v0.1.5
     coverage : 2x
-    seed     : 42
 
 annotations:
     gtf : /groups/hachgrp/annotations/GTF/92/Homo_sapiens.GRCh38.92.gtf

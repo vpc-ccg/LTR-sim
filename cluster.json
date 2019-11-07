@@ -7,4 +7,12 @@
         "name" : "ltr_sim",
         "p" : "long,big-mem,normal,express",
     },
+    "generate_reads" :
+    {
+        "time" : "23:59:00",
+        "mem" : "512GB",
+        "c" : 1,
+        "name" : "badLTread",
+        "p" : "long,big-mem,normal,express",
+    },
 }

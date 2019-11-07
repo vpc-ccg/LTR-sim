@@ -1,11 +1,11 @@
 import sys
 import numpy as np
 import copy as cp
-from random import choices
+import random
 from collections import Counter
 from math import ceil
 
-def write_new_variation(header, seq, fout, ls=60):
+def write_new_variation(header, seq, fout, ls=100000000000):
 	fout.write(header)
 	fout.write('\n')
 
@@ -35,42 +35,46 @@ def split_number(num, part):
 	return final
 
 def sample_with_replacement(seq_len, slope, intercept, depth, points=1000):
-	if seq_len > 10000:
-		slope //= 1
-	elif 75000 > seq_len > 5000:
-		slope //= 1.5
-	elif 5000 > seq_len > 3000:
-		slope //= 3
-	elif 3000 > seq_len > 1500:
-		slope //= 6
-	elif 1500 > seq_len > 0:
-		slope //= 10
+	# if seq_len > 10000:
+	# 	slope /= 1
+	# elif 75000 > seq_len > 5000:
+	# 	slope /= 1.5
+	# elif 5000 > seq_len > 3000:
+	# 	slope /= 3
+	# elif 3000 > seq_len > 1500:
+	# 	slope /= 6
+	# elif 1500 > seq_len > 0:
+	# 	slope /= 10
+	slope = int(slope)
+	intercept = min(intercept, seq_len)
 	all_lens = []
 	cur_len = seq_len
 	for i in range(points):
-		if i % 2 == 0:
+		if i % 50 == 0:
 			percentage = cur_len/seq_len
 			print('{:6.2f}% {:5}nt: {}'.format(percentage*100, cur_len, '*'*ceil(50*percentage)))
 		# print('-'*200*int())
 		all_lens.append(cur_len)
 		cur_len = max(intercept, cur_len - slope)
 
-	lens = choices(all_lens, k=depth)
+	lens = random.choices(all_lens, k=depth)
 	return lens
 
 def degrade(header, seq, slope, intercept, fout):
 	header_list = header.strip().split()
 	depth = None
-	for field in header_list:
+	depth_idx = -1
+	for idx,field in enumerate(header_list):
 		if 'depth=' in field:
 			depth = int(field.split('=')[1])
+			depth_idx = idx
 			break
 	if depth == None:
 		raise Exception('Contig with header <{}> does not have depth comment'.format(header))
 
 	seq_len = len(seq)
 
-	lens = sample_with_replacement(seq_len, slope, intercept, depth)
+	lens = sorted(sample_with_replacement(seq_len, slope, intercept, depth))
 
 	i = 0
 	len_counts = Counter(lens)
@@ -80,14 +84,20 @@ def degrade(header, seq, slope, intercept, fout):
 
 		new_header_list = cp.deepcopy(header_list)
 		new_header_list[0] += '_D{}'.format(i)
-		new_header_list[1] = '{} offset={}'.format(new_depth, -1*(seq_len - length))
+		new_header_list[depth_idx] = '{} offset={}'.format(new_depth, -1*(seq_len - length))
 		new_header = ' '.join(new_header_list)
 
 		degradation_length = len(seq) - length
-		new_seq = seq[degradation_length : ]
+		try:
+			new_seq = seq[degradation_length : ]
+		except:
+			print('seq_len: {}\n, slope: {}\n, intercept: {}\n, depth: {}'.format(seq_len,slope,intercept,depth))
+			print(len_counts)
+			print(length)
+			print(degradation_length)
+			1/0
 		write_new_variation(new_header, new_seq, fout)
 		i += 1
-
 
 def process_all(trans_in, trans_out, slope, intercept):
 	fout = open(trans_out, 'w')
@@ -110,14 +120,14 @@ def process_all(trans_in, trans_out, slope, intercept):
 	degrade(header, seq, slope, intercept, fout)
 
 def usage():
-	print('\nUsage: python {} transcriptome_FASTA output_FASTA slope intercept'.format(sys.argv[0]))
+	print('\nUsage: python {} transcriptome_FASTA output_FASTA slope intercept random_seed'.format(sys.argv[0]))
 
 def main():
 	print('This script generates degraded variations of the given transcripts')
 	print(sys.argv)
 	args = sys.argv[1:]
 
-	if len(args) != 4:
+	if len(args) != 5:
 		usage()
 		exit(1)
 
@@ -126,6 +136,7 @@ def main():
 		trans_out = args[1]
 		slope = int(args[2])
 		intercept = int(args[3])
+		random.seed(int(args[4]))
 	except ValueError as err:
 		print('Error in arguments!\n{}'.format(err))
 		exit(1)
