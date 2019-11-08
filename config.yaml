@@ -16,30 +16,31 @@ samples:
     #     - /groups/hachgrp/projects/dev-ont/raw-data/wts/fastq/P001R511/P001R511.pass.fastq
 
 genes:
-    - All_genes
-    # - ENSG00000169083 # AR
-    # - ENSG00000187838 # PLSCR3
-    # - ENSG00000156508 # E2F1
+    # - All_genes
+    - ENSG00000169083 # AR
+    - ENSG00000187838 # PLSCR3
+    - ENSG00000156508 # E2F1
 
 exec:
     ltrsim  : ./ltrsim.py
     polyA   : scripts/polyA.py
     degrade : scripts/degradation.py
     badread : extern/Badread/badread-runner.py
+    split_file : scripts/split_file.py
 
 degradation_level:
     non:
         slope     : 0
         intercept : 0
-    nonREP:
-        slope     : 0
-        intercept : 0
-    low:
-        slope     : 5
-        intercept : 400
-    high:
-        slope     : 25
-        intercept : 300
+    # nonREP:
+    #     slope     : 0
+    #     intercept : 0
+    # low:
+    #     slope     : 5
+    #     intercept : 400
+    # high:
+    #     slope     : 25
+    #     intercept : 300
 
 polyA_config:
     mean   : 60
@@ -61,7 +62,7 @@ annotations:
     gtf : /groups/hachgrp/annotations/GTF/92/Homo_sapiens.GRCh38.92.gtf
 
 badread:
-    batches  : 50
+    batches  : 5
     url      : https://github.com/baraaorabi/Badread.git
     tag      : v0.1.5
     coverage : 2x

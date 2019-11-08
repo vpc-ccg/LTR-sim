@@ -1,7 +1,9 @@
 configfile: 'config.yaml'
 
 import os
+import sys
 
+sys.setrecursionlimit(100)
 def get_abs_path(path):
     abs_path = os.popen('readlink -f {}'.format(path)).read()
     return abs_path.rstrip("\r\n")
@@ -19,10 +21,23 @@ reads_d = '{}/reads'.format(outpath)
 
 rule all:
     input:
-        expand('{}/{{sample}}.L-{{degradation_level}}.fastq'.format(reads_d),
+        # expand('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d),
+        #        sample=config['samples'],
+        #        degradation_level=config['degradation_level'],),
+        # expand('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(reads_d),
+        #        sample=config['samples'],
+        #        degradation_level=config['degradation_level'],
+        #        bid=list(range(config['badread']['batches']))),
+        # expand('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.reads.fastq'.format(reads_d),
+        #        sample=config['samples'],
+        #        degradation_level=config['degradation_level'],
+        #        bid=list(range(config['badread']['batches']))),
+        expand('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.reads.fastq'.format(reads_d),
                sample=config['samples'],
-               degradation_level=config['degradation_level'],)
-               # out_file=['reads.tsv', 'renamed.fastq']),
+               degradation_level=config['degradation_level']),
+        expand('{}/{{sample}}.L-{{degradation_level}}.tsv'.format(reads_d),
+               sample=config['samples'],
+               degradation_level=config['degradation_level']),
 
 rule git_badread:
     output:
@@ -132,7 +147,6 @@ rule add_poly_A:
         '   {params.mincut} {params.maxcut}'
         '   {params.seed}'
 
-
 rule degrade:
     conda:
         'conda.env'
@@ -141,6 +155,9 @@ rule degrade:
         cdna_A = '{}/{{sample}}.cdna.polyA.fasta'.format(reads_d)
     output:
         cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d)
+    wildcard_constraints:
+        sample='|'.join(config['samples']),
+        degradation_level='|'.join(config['degradation_level'])
     params:
         intercept = lambda wildcards: config['degradation_level'][wildcards.degradation_level]['intercept'],
         slope     = lambda wildcards: config['degradation_level'][wildcards.degradation_level]['slope'],
@@ -151,68 +168,29 @@ rule degrade:
         '   {params.slope} {params.intercept}'
         '   {params.seed}'
 
-
-
-
-
-
-
-rule collect_batches:
-    input:
-        ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{}.reads.fastq'.format(reads_d,x) for x in range(int(config["badread"]["batches"]))]
-    output:
-        "{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.reads.fastq".format(reads_d)
-    shell:
-        "cat {input} > {output}"
-
-
 rule batch_fasta:
     input:
-        '{}/{{sample}}.cdna.polyA.degraded-{{degration_level}}.fasta'
+        split_file = config['exec']['split_file'],
+        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d)
     output:
         ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{}.fasta'.format(reads_d,x) for x in range(int(config["badread"]["batches"]))]
-    run:
-        from math import ceil
-        with open (input[0], 'r') as reader:
-            lines = reader.readlines()
-            numctgs = len(lines) /2
-            batch_count = int(config["badread"]["batches"])
-            batch_size = ceil(num_ctgs / batch_count)
-            
-            for index, out in enumerate(output):
-                with open( out, 'w') as outer:
-                    for i in range(2 * index * batch_size, 2 *  (index+1) * batch_size - 2,2):
-                        if i > numctgs:
-                            break
-                        print( lines[i], end="", file=outer)
-                        print( lines[i+1], end="", file=outer)
-                        
-            
-rule batched_generate_reads:
-    conda:
-        'conda.env'
-    input:
-        badread = config['exec']['badread'],
-        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(reads_d),
-        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.cov.txt'.format(reads_d)
-    output:
-        fastq   = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.reads.fastq'.format(reads_d),
+    wildcard_constraints:
+        sample='|'.join(config['samples']),
+        degradation_level='|'.join(config['degradation_level'])
     params:
-        # coverage = config['badread']['coverage'],
-        seed     = config['seed'],
+        lines_per_fasta = 2
     shell:
-        'PYTHONHASHSEED=0 {input.badread} simulate --seed {params.seed} --length 100000,0'
-        '   --reference {input.cdna_A_degraded} --quantity $(cat {input.cdna_A_degraded_cov})x'
-        '   --chimeras 0 --random_reads 0 --junk_reads 0 --glitches 0,0,0'
-        '   > {output.fastq}'
-
-
+        '{input.split_file} -i {input.cdna_A_degraded} -o {output} -l {params.lines_per_fasta}'
 
 rule batched_get_throughput:
     input:
         cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(reads_d)
     output:
         cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.cov.txt'.format(reads_d)
+    wildcard_constraints:
+        sample='|'.join(config['samples']),
+        degradation_level='|'.join(config['degradation_level']),
+        bid='|'.join([str(b) for b in range(config['badread']['batches'])])
     run:
         amplified_throughput = 0.0
         throughput = 0.0
@@ -229,37 +207,19 @@ rule batched_get_throughput:
                 print(len(line),depth,amplified_throughput,throughput)
         print('{:.2f}'.format(amplified_throughput/throughput), end='', file=open(output.cdna_A_degraded_cov, 'w+'))
 
-"""
-rule get_throughput:
-    input:
-        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d)
-    output:
-        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.cov.txt'.format(reads_d)
-    run:
-        amplified_throughput = 0.0
-        throughput = 0.0
-        for line_num,line in enumerate(open(input.cdna_A_degraded)):
-            line = line.rstrip()
-            if line_num % 2 == 0:
-                header_list = line.split()
-            	for idx,field in enumerate(header_list):
-                    if 'depth=' in field:
-                        depth = int(field.split('=')[1])
-            elif line_num % 2 == 1:
-                amplified_throughput+=len(line)*depth
-                throughput+=len(line)
-                print(len(line),depth,amplified_throughput,throughput)
-        print('{:.2f}'.format(amplified_throughput/throughput), end='', file=open(output.cdna_A_degraded_cov, 'w+'))
-
-rule generate_reads:
+rule batched_generate_reads:
     conda:
         'conda.env'
     input:
-        badread = config['exec']['badread'],
-        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d),
-        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.cov.txt'.format(reads_d)
+        badread             = config['exec']['badread'],
+        cdna_A_degraded     = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(reads_d),
+        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.cov.txt'.format(reads_d)
     output:
-        fastq   = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.reads.fastq'.format(reads_d),
+        fastq               = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.reads.fastq'.format(reads_d),
+    wildcard_constraints:
+        sample='|'.join(config['samples']),
+        degradation_level='|'.join(config['degradation_level']),
+        bid='|'.join([str(b) for b in range(config['badread']['batches'])])
     params:
         # coverage = config['badread']['coverage'],
         seed     = config['seed'],
@@ -269,14 +229,27 @@ rule generate_reads:
         '   --chimeras 0 --random_reads 0 --junk_reads 0 --glitches 0,0,0'
         '   > {output.fastq}'
 
-"""
+rule collect_batches:
+    input:
+        ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{}.reads.fastq'.format(reads_d,x) for x in range(int(config["badread"]["batches"]))]
+    output:
+        '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.reads.fastq'.format(reads_d)
+    wildcard_constraints:
+        sample='|'.join(config['samples']),
+        degradation_level='|'.join(config['degradation_level']),
+    shell:
+        'cat {input} > {output}'
+
 rule reads_info:
     input:
         fastq   = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.reads.fastq'.format(reads_d),
         gtf   = config['annotations']['gtf'],
     output:
-        tsv   = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.reads.tsv'.format(reads_d),
+        tsv   = '{}/{{sample}}.L-{{degradation_level}}.tsv'.format(reads_d),
         fastq = '{}/{{sample}}.L-{{degradation_level}}.fastq'.format(reads_d),
+    wildcard_constraints:
+        sample='|'.join(config['samples']),
+        degradation_level='|'.join(config['degradation_level']),
     run:
         print('Parsing read information from {}'.format(input))
         t_headers = [
