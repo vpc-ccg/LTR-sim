@@ -15,29 +15,28 @@ outpath = get_abs_path(config['outpath'])
 make_slurm()
 config['exec']['ltrsim'] = get_abs_path(config['exec']['ltrsim'])
 
-map_d   = '{}/map'.format(outpath)
-train_d = '{}/train'.format(outpath)
-reads_d = '{}/reads'.format(outpath)
+map_d     = '{}/map'.format(outpath)
+train_d   = '{}/train'.format(outpath)
+reads_d   = '{}/reads'.format(outpath)
+batches_d = '{}/batches'.format(reads_d)
 
 rule all:
     input:
         # expand('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d),
         #        sample=config['samples'],
         #        degradation_level=config['degradation_level'],),
-        # expand('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(reads_d),
+        # expand('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(batches_d),
         #        sample=config['samples'],
         #        degradation_level=config['degradation_level'],
         #        bid=list(range(config['badread']['batches']))),
-        # expand('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.reads.fastq'.format(reads_d),
+        # expand('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.reads.fastq'.format(batches_d),
         #        sample=config['samples'],
         #        degradation_level=config['degradation_level'],
         #        bid=list(range(config['badread']['batches']))),
-        expand('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.reads.fastq'.format(reads_d),
+        expand('{}/{{sample}}.L-{{degradation_level}}.{{extension}}'.format(reads_d),
                sample=config['samples'],
-               degradation_level=config['degradation_level']),
-        expand('{}/{{sample}}.L-{{degradation_level}}.tsv'.format(reads_d),
-               sample=config['samples'],
-               degradation_level=config['degradation_level']),
+               degradation_level=config['degradation_level'],
+               extension=['fastq','tsv']),
 
 rule git_badread:
     output:
@@ -72,7 +71,12 @@ rule expression_rate:
         tid_to_rcnt = dict()
         for idx,line in enumerate(open(input.paf)):
             if idx % 100000 == 0:
-                print('Read {} reads'.format(idx))
+                if idx < 1000000:
+                    print('Read {:4d}K alns'.format(idx//1000))
+                else:
+                    print('Read {:4.1f}M alns'.format(idx/1000000))
+            if not 'tp:A:P' in line:
+                continue
             line = line.rstrip().split('\t')
             # rid = l[0]
             tid = line[5].split('_')[-1].split('.')[0]
@@ -92,6 +96,8 @@ rule sim_transcriptome:
         print('Simulating transcriptome from {}'.format(input))
         tid_to_rcnt = dict()
         genes = set(config['genes'])
+        chroms = set([str(c) for c in config['chroms']])
+        print(chroms)
         for line in open(input.exp):
             line = line.rstrip().split('\t')
             tid = line[0]
@@ -109,11 +115,13 @@ rule sim_transcriptome:
                 gene_name_field_sepa = '.'
                 gene_name = line[line.find(gene_name_field_name):]
                 gene_name = gene_name[len(gene_name_field_name) : gene_name.find(gene_name_field_sepa)]
-                if not ('All_genes' in genes or gene_name in genes):
+                chrom_name_field_name = 'chromosome:GRCh38:'
+                chrom_name_field_sepa = ':'
+                chrom_name = line[line.find(chrom_name_field_name) + len(chrom_name_field_name):].split(chrom_name_field_sepa)[0]
+                if not chrom_name in chroms or not ('All_genes' in genes or gene_name in genes):
                     flag = False
                     continue
                 flag = True
-                print(gene_name)
                 line = line[1:]
                 line = line.split()
                 tid = line[0].split('.')[0]
@@ -170,10 +178,10 @@ rule degrade:
 
 rule batch_fasta:
     input:
-        split_file = config['exec']['split_file'],
+        split_file      = config['exec']['split_file'],
         cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d)
     output:
-        ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{}.fasta'.format(reads_d,x) for x in range(int(config["badread"]["batches"]))]
+        ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{}.fasta'.format(batches_d,x) for x in range(int(config["badread"]["batches"]))]
     wildcard_constraints:
         sample='|'.join(config['samples']),
         degradation_level='|'.join(config['degradation_level'])
@@ -184,9 +192,9 @@ rule batch_fasta:
 
 rule batched_get_throughput:
     input:
-        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(reads_d)
+        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(batches_d)
     output:
-        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.cov.txt'.format(reads_d)
+        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.cov.txt'.format(batches_d)
     wildcard_constraints:
         sample='|'.join(config['samples']),
         degradation_level='|'.join(config['degradation_level']),
@@ -212,10 +220,10 @@ rule batched_generate_reads:
         'conda.env'
     input:
         badread             = config['exec']['badread'],
-        cdna_A_degraded     = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(reads_d),
-        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.cov.txt'.format(reads_d)
+        cdna_A_degraded     = temp('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(batches_d)),
+        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.cov.txt'.format(batches_d)
     output:
-        fastq               = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.reads.fastq'.format(reads_d),
+        fastq               = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.reads.fastq'.format(batches_d),
     wildcard_constraints:
         sample='|'.join(config['samples']),
         degradation_level='|'.join(config['degradation_level']),
@@ -229,21 +237,10 @@ rule batched_generate_reads:
         '   --chimeras 0 --random_reads 0 --junk_reads 0 --glitches 0,0,0'
         '   > {output.fastq}'
 
-rule collect_batches:
-    input:
-        ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{}.reads.fastq'.format(reads_d,x) for x in range(int(config["badread"]["batches"]))]
-    output:
-        '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.reads.fastq'.format(reads_d)
-    wildcard_constraints:
-        sample='|'.join(config['samples']),
-        degradation_level='|'.join(config['degradation_level']),
-    shell:
-        'cat {input} > {output}'
-
 rule reads_info:
     input:
-        fastq   = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.reads.fastq'.format(reads_d),
-        gtf   = config['annotations']['gtf'],
+        fastqs = ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{}.reads.fastq'.format(batches_d,x) for x in range(int(config["badread"]["batches"]))],
+        gtf    = config['annotations']['gtf'],
     output:
         tsv   = '{}/{{sample}}.L-{{degradation_level}}.tsv'.format(reads_d),
         fastq = '{}/{{sample}}.L-{{degradation_level}}.fastq'.format(reads_d),
@@ -269,6 +266,7 @@ rule reads_info:
                 continue
             info = {x.split()[0] : x.split()[1].strip('"') for x in line[8].strip('; ').split(';')}
             tid_to_info[info['transcript_id']] = {f:info[f] for f in t_headers}
+        print(len(tid_to_info))
         r_headers = [
             'read_id',
             'strand',
@@ -284,53 +282,55 @@ rule reads_info:
         out_fastq = open(output.fastq, 'w+')
         rid = 0
         print('\t'.join(t_headers + r_headers), file=out_tsv)
-        for line in open(input.fastq):
-            if line[0] == '@':
-                tid = line.split()[1].split(',')[0]
-                print('@{}_{:08d}'.format(tid, rid), file=out_fastq)
-                rid+=1
-            else:
-                print(line, end='', file=out_fastq)
-            if line[0] != '@':
-                continue
-            line = line.rstrip()
-            line = line.split()
-            rid_info = {x:'NA' for x in r_headers}
-            rid_info['type'] = 'normal'
+        for input_fastq in input.fastqs:
+            print(input_fastq)
+            for line in open(input_fastq):
+                if line[0] == '@':
+                    tid = line.split()[1].split(',')[0]
+                    print('@{}_{:08d}'.format(tid, rid), file=out_fastq)
+                    rid+=1
+                else:
+                    print(line, end='', file=out_fastq)
+                if line[0] != '@':
+                    continue
+                line = line.rstrip()
+                line = line.split()
+                rid_info = {x:'NA' for x in r_headers}
+                rid_info['type'] = 'normal'
 
-            field = line[0]
-            rid_info['read_id'] = field[1:]
+                field = line[0]
+                rid_info['read_id'] = field[1:]
 
-            line = line[1:]
-            field = line[0]
-            if field in ['junk_seq', 'random_seq']:
-                tid = 'non'
-                rid_info['type'] = field
-            else:
-                field = field.split(',')
-                tid                = field[0].split('_')[0]
-                rid_info['strand'] = field[1][0]
-                rid_info['start']  = field[2].split('-')[0]
-                rid_info['end']    = field[2].split('-')[0]
-            while line[1] == 'chimera':
-                if rid_info['chimera'] == 'NA':
-                    rid_info['chimera'] = ''
-                line = line[2:]
-                rid_info['chimera'] += '{};'.format(line[0])
-                rid_info['type']    += ';chimera'
-            try:
-                assert(len(line) == 4)
-            except Exception:
-                print(line)
-                assert(len(line) == 4)
-            while len(line)>1:
                 line = line[1:]
                 field = line[0]
-                field = field.split('=')
-                rid_info[field[0]] = field[1]
-            out_line = list()
-            out_line.extend([tid_to_info[tid][h] for h in t_headers])
-            out_line.extend([rid_info[h] for h in r_headers])
-            print('\t'.join(out_line), file=out_tsv)
+                if field in ['junk_seq', 'random_seq']:
+                    tid = 'non'
+                    rid_info['type'] = field
+                else:
+                    field = field.split(',')
+                    tid                = field[0].split('_')[0]
+                    rid_info['strand'] = field[1][0]
+                    rid_info['start']  = field[2].split('-')[0]
+                    rid_info['end']    = field[2].split('-')[0]
+                while line[1] == 'chimera':
+                    if rid_info['chimera'] == 'NA':
+                        rid_info['chimera'] = ''
+                    line = line[2:]
+                    rid_info['chimera'] += '{};'.format(line[0])
+                    rid_info['type']    += ';chimera'
+                try:
+                    assert(len(line) == 4)
+                except Exception:
+                    print(line)
+                    assert(len(line) == 4)
+                while len(line)>1:
+                    line = line[1:]
+                    field = line[0]
+                    field = field.split('=')
+                    rid_info[field[0]] = field[1]
+                out_line = list()
+                out_line.extend([tid_to_info[tid][h] for h in t_headers])
+                out_line.extend([rid_info[h] for h in r_headers])
+                print('\t'.join(out_line), file=out_tsv)
         out_fastq.close()
         out_tsv.close()

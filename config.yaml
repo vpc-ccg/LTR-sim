@@ -15,11 +15,37 @@ samples:
     #     - /groups/hachgrp/projects/dev-ont/raw-data/wts/fastq/P001R510/P001R510.pass.fastq
     #     - /groups/hachgrp/projects/dev-ont/raw-data/wts/fastq/P001R511/P001R511.pass.fastq
 
+chroms:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+    - 10
+    - 11
+    - 12
+    - 13
+    - 14
+    - 15
+    - 16
+    - 17
+    - 18
+    - 19
+    - 20
+    - 21
+    - 22
+    - X
+    - Y
+    - MT
+
 genes:
-    # - All_genes
-    - ENSG00000169083 # AR
-    - ENSG00000187838 # PLSCR3
-    - ENSG00000156508 # E2F1
+    - All_genes
+    # - ENSG00000169083 # AR
+    # - ENSG00000187838 # PLSCR3
 
 exec:
     ltrsim  : ./ltrsim.py
@@ -32,15 +58,15 @@ degradation_level:
     non:
         slope     : 0
         intercept : 0
-    # nonREP:
-    #     slope     : 0
-    #     intercept : 0
-    # low:
-    #     slope     : 5
-    #     intercept : 400
-    # high:
-    #     slope     : 25
-    #     intercept : 300
+    nonREP:
+        slope     : 0
+        intercept : 0
+    low:
+        slope     : 5
+        intercept : 400
+    high:
+        slope     : 25
+        intercept : 300
 
 polyA_config:
     mean   : 60
@@ -55,17 +81,14 @@ mapping_settings:
 references:
     dna      : /groups/hachgrp/annotations/DNA/92/Homo_sapiens.GRCh38.dna.fa
     dna_fai  : /groups/hachgrp/annotations/DNA/92/Homo_sapiens.GRCh38.dna.fa.fai
-    cdna     : /groups/hachgrp/annotations/cDNA/92/Homo_sapiens.GRCh38.92.cdna.all.fa
-    cdna_fai : /groups/hachgrp/annotations/cDNA/92/Homo_sapiens.GRCh38.92.cdna.all.fa.fai
+    cdna     : /groups/hachgrp/annotations/cDNA/97/Homo_sapiens.GRCh38.cdna.all.fa
+    cdna_fai : /groups/hachgrp/annotations/cDNA/97/Homo_sapiens.GRCh38.cdna.all.fa.fai
 
 annotations:
-    gtf : /groups/hachgrp/annotations/GTF/92/Homo_sapiens.GRCh38.92.gtf
+    gtf : /groups/hachgrp/annotations/GTF/97/Homo_sapiens.GRCh38.97.gtf
 
 badread:
-    batches  : 5
+    batches  : 256
     url      : https://github.com/baraaorabi/Badread.git
     tag      : v0.1.5
     coverage : 2x
-
-annotations:
-    gtf : /groups/hachgrp/annotations/GTF/92/Homo_sapiens.GRCh38.92.gtf
