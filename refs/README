@@ -1,0 +1,10 @@
+Download the following files:
+
+Homo_sapiens.GRCh38.dna.fa:
+ftp://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+
+Homo_sapiens.GRCh38.cdna.fa:
+ftp://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz
+
+Homo_sapiens.GRCh38.gtf:
+ftp://ftp.ensembl.org/pub/release-97/gtf/homo_sapiens/Homo_sapiens.GRCh38.97.gtf.gz
