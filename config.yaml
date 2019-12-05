@@ -6,14 +6,10 @@ seed:
 
 samples:
     P000S000:
-        - /groups/hachgrp/projects/ana-22rv1/raw-data/wts/fastq/P000R000/P000R000.pass.fastq
-        - /groups/hachgrp/projects/ana-22rv1/raw-data/wts/fastq/P000R001/P000R001.pass.fastq
-        - /groups/hachgrp/projects/ana-22rv1/raw-data/wts/fastq/P000R002/P000R002.pass.fastq
-    # P001S000:
-    #     - /groups/hachgrp/projects/dev-ont/raw-data/wts/fastq/P001R410/P001R410.pass.fastq
-    #     - /groups/hachgrp/projects/dev-ont/raw-data/wts/fastq/P001R411/P001R411.pass.fastq
-    #     - /groups/hachgrp/projects/dev-ont/raw-data/wts/fastq/P001R510/P001R510.pass.fastq
-    #     - /groups/hachgrp/projects/dev-ont/raw-data/wts/fastq/P001R511/P001R511.pass.fastq
+        # Own data
+        - samples/P000S000.P000R000.pass.fastq
+        - samples/P000S000.P000R001.pass.fastq
+        - samples/P000S000.P000R002.pass.fastq
 
 chroms:
     - 1
@@ -79,13 +75,16 @@ mapping_settings:
     cdna : map-ont
 
 references:
-    dna      : /groups/hachgrp/annotations/DNA/92/Homo_sapiens.GRCh38.dna.fa
-    dna_fai  : /groups/hachgrp/annotations/DNA/92/Homo_sapiens.GRCh38.dna.fa.fai
-    cdna     : /groups/hachgrp/annotations/cDNA/97/Homo_sapiens.GRCh38.cdna.all.fa
-    cdna_fai : /groups/hachgrp/annotations/cDNA/97/Homo_sapiens.GRCh38.cdna.all.fa.fai
+    # ftp://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+    dna      : refs/Homo_sapiens.GRCh38.dna.fa
+    dna_fai  : refs/Homo_sapiens.GRCh38.dna.fa.fai
+    # ftp://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz
+    cdna     : refs/Homo_sapiens.GRCh38.cdna.fa
+    cdna_fai : refs/Homo_sapiens.GRCh38.cdna.fa.fai
 
 annotations:
-    gtf : /groups/hachgrp/annotations/GTF/97/Homo_sapiens.GRCh38.97.gtf
+    # ftp://ftp.ensembl.org/pub/release-97/gtf/homo_sapiens/Homo_sapiens.GRCh38.97.gtf.gz
+    gtf : refs/Homo_sapiens.GRCh38.gtf
 
 badread:
     batches  : 256

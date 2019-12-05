@@ -20,6 +20,10 @@ train_d   = '{}/train'.format(outpath)
 reads_d   = '{}/reads'.format(outpath)
 batches_d = '{}/batches'.format(reads_d)
 
+localrules:
+    all,
+    batched_get_throughput
+    
 rule all:
     input:
         # expand('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d),
