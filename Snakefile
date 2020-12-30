@@ -138,12 +138,24 @@ rule sim_transcriptome:
             print(''.join(seq), file=outfile)
         outfile.close()
 
+rule fuse_genes:
+    input:
+        make_fusions = config['exec']['fuser'],
+        cdna  = '{}/{{sample}}.cdna.fasta'.format(reads_d),
+        gtf    = config['annotations']['gtf'],
+        fusion_info    = config['fusionsim']['fusion_info'],
+    output:
+        cdna  = '{}/{{sample}}.cdna.fused.fasta'.format(reads_d),
+        fus_index  = '{}/{{sample}}.cdna.fused.tsv'.format(reads_d),
+    shell:
+        'PYTHONHASHSEED=0 python3 {input.make_fusions} {input.cdna}'
+        ' {input.gtf} {input.fusion_info} {output.cdna} {output.fus_index}'
 rule add_poly_A:
     conda:
         'conda.env'
     input:
         polyA = config['exec']['polyA'],
-        cdna  = '{}/{{sample}}.cdna.fasta'.format(reads_d),
+        cdna  = '{}/{{sample}}.cdna.fused.fasta'.format(reads_d),
     output:
         cdna_A = '{}/{{sample}}.cdna.polyA.fasta'.format(reads_d)
     params:
@@ -158,6 +170,7 @@ rule add_poly_A:
         '   {params.mean} {params.stddev}'
         '   {params.mincut} {params.maxcut}'
         '   {params.seed}'
+
 
 rule degrade:
     conda:

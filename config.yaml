@@ -1,5 +1,5 @@
 outpath:
-    /groups/hachgrp/projects/dev-ltr-simulator/analysis/ltr-sim-dev/
+    /groups/hachgrp/projects/dev-genion/analysis/simulation-21_22/
 
 seed:
     42
@@ -11,7 +11,10 @@ samples:
         - samples/P000S000.P000R001.pass.fastq
         - samples/P000S000.P000R002.pass.fastq
 
-chroms:
+fusionsim:
+    fusion_info:
+        fusion_info.tsv
+all_chroms:
     - 1
     - 2
     - 3
@@ -38,6 +41,9 @@ chroms:
     - Y
     - MT
 
+chroms:
+    - 21
+    - 22
 genes:
     - All_genes
     # - ENSG00000169083 # AR
@@ -49,7 +55,7 @@ exec:
     degrade : scripts/degradation.py
     badread : extern/Badread/badread-runner.py
     split_file : scripts/split_file.py
-
+    fuser   : scripts/make_fusion_fasta.py
 degradation_level:
     non:
         slope     : 0
@@ -87,7 +93,7 @@ annotations:
     gtf : refs/Homo_sapiens.GRCh38.gtf
 
 badread:
-    batches  : 256
+    batches  : 16
     url      : https://github.com/baraaorabi/Badread.git
     tag      : v0.1.5
     coverage : 2x
