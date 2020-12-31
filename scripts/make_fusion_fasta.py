@@ -15,7 +15,7 @@ def get_base_count(exons, bp, forward):
         for e in reversed(exons):
             if e[1] < bp:
                 if e[2] > bp:
-                    bases = bases +  e[2] - bp
+                    bases = bases + e[2] - bp
                 break
             else:
                 bases = bases + e[2]-e[1]
@@ -53,9 +53,14 @@ def main(argc, argv):
             genotype = fields[7]
             sv_type = fields[6]
             
-
+            if len(fields) > 10:
+                t1= fields[10]
+                t2 = fields[11]
+                
+                fusions.append( (g1,g2,chr1,chr2,pos1,pos2,genotype,sv_type,True,t1,t2))
 #22 24806290 24806291 22 26467150 26467151 inversion 1/0 ENSG00000167037 ENSG00000100099
-            fusions.append( (g1,g2,chr1,chr2,pos1,pos2,genotype,sv_type))
+            else:
+                fusions.append( (g1,g2,chr1,chr2,pos1,pos2,genotype,sv_type,False))
             fusion_genes[g1] = fusions[-1] 
             fusion_genes[g2] = fusions[-1]
 
@@ -104,7 +109,7 @@ def main(argc, argv):
     """
 #>ENST00000525964_D0 depth=8 offset=0 cdna chromosome:GRCh38:11:134152847:134224216:-1 gene:ENSG00000151503.12 gene_biotype:protein_coding transcript_biotype:nonsense_mediated_decay gene_symbol:NCAPD3 description:non-SMC condensin II complex subunit D3 [Source:HGNC Symbol;Acc:HGNC:28952]
     fused_seqs = {}
-    with open(cdna_fasta_file, 'r') as hand, open(output_file, 'w') as whand:
+    with open(cdna_fasta_file, 'r') as hand, open(output_file, 'w') as whand, open(fusion_index_file, 'w') as ihand:
         line = hand.readline()
         while line:
             header = line.rstrip()
@@ -130,7 +135,7 @@ def main(argc, argv):
                 print(seq,file=whand)
             line = hand.readline()
             #if transcript not in fusion_genes:
-
+        fusion_transcript_index = 0
         if fuse_strategy == "DISTRIBUTE":
             for f in fusions:
                 pass
@@ -138,6 +143,7 @@ def main(argc, argv):
             for fusion_index,f in enumerate(fusions):
                 g1 = f[0]
                 g2 = f[1]
+                
                 t1l = gene_to_transcript[g1]
                 t2l = gene_to_transcript[g2]
 
@@ -145,25 +151,42 @@ def main(argc, argv):
 
                 s1 = gene_to_strand[g1]
                 s2 = gene_to_strand[g2]
+                if f[8]:
+                    max_depth_transcript1 = f[9]
+                    seqtup = fused_seqs[f[9]]
 
-                max_depth_transcript1 = "-1"
-                max_depth1 = -1
-                for t in t1l:
-                    seqtup = fused_seqs[t]
-                    depth = seqtup[2]
-                    if depth > max_depth1:
-                        max_depth1 = depth
-                        max_depth_transcript1 = t
+                    sum_dep1 = 0
+                    for t in t1l:
+                        seqtup = fused_seqs[t]
+                        depth = seqtup[2]
+                        sum_dep1+=depth
+                    max_depth1 = sum_dep1
+                else:
+                    max_depth_transcript1 = "-1"
+                    max_depth1 = -1
+                    for t in t1l:
+                        seqtup = fused_seqs[t]
+                        depth = seqtup[2]
+                        if depth > max_depth1:
+                            max_depth1 = depth
+                            max_depth_transcript1 = t
 
-                max_depth_transcript2 = "-1"
-                max_depth2 = -1
-                for t in t2l:
-                    seqtup = fused_seqs[t]
-                    depth = seqtup[2]
-                    if depth > max_depth2:
-                        max_depth2 = depth
-                        max_depth_transcript2 = t
-                
+                if f[8]:
+                    max_depth_transcript2 = f[10]
+                    seqtup = fused_seqs[f[10]]
+                    max_depth2 = seqtup[2]
+
+                else:
+
+                    max_depth_transcript2 = "-1"
+                    max_depth2 = -1
+                    for t in t2l:
+                        seqtup = fused_seqs[t]
+                        depth = seqtup[2]
+                        if depth > max_depth2:
+                            max_depth2 = depth
+                            max_depth_transcript2 = t
+                    
 
                 exons1 = sorted(transcript_to_exons[max_depth_transcript1],key=lambda x: x[1]) #Sort by start pos of exons since - strand exons will be reversely sorted
                 exons2 = sorted(transcript_to_exons[max_depth_transcript2],key=lambda x: x[1])
@@ -177,18 +200,21 @@ def main(argc, argv):
                 bases1 = 0
                 bases2 = 0
                 if s1 == s2: #deletion cases
-                    bases1=get_base_count(exons1,breakpoint1,True)
-                    fusion_sequence += fused_seqs[max_depth_transcript1][1][-bases1:]
+                    bases1=get_base_count(exons1,breakpoint1,s1 == "+")
+                    fusion_sequence += fused_seqs[max_depth_transcript1][1][:bases1]
                     
-                    bases2=get_base_count(exons2,breakpoint2,False)
-                    fusion_sequence += fused_seqs[max_depth_transcript2][1][:bases2]
+                    bases2=get_base_count(exons2,breakpoint2,s1 != "+")
+                    fusion_sequence += fused_seqs[max_depth_transcript2][1][-bases2:]
+
                 else: #inversion cases
-                    if s1 == "+":                       
+                    if s1 == "+":
+
                         bases1=get_base_count(exons1,breakpoint1,True)
-                        fusion_sequence += fused_seqs[max_depth_transcript1][1][-bases1:]
+                        fusion_sequence += fused_seqs[max_depth_transcript1][1][:bases1]
 
                         bases2=get_base_count(exons2,breakpoint2,True)
                         fusion_sequence += fused_seqs[max_depth_transcript2][1][-bases2:]
+
 
                     else:
                         bases1=get_base_count(exons1,breakpoint1,False)
@@ -201,19 +227,19 @@ def main(argc, argv):
 
                 fusion_gene_id = "FUSG{0:011}".format(fusion_index)
                 fusion_transcript_id = "FUST{0:011}".format(fusion_transcript_index)
-                fusion_name = "{}::{}".format(gene_id_to_name[g1], genen_id_to_name[g2])
-                print(bases1,exons1,file=sys.stderr)
-                print(bases2,exons2,file=sys.stderr)
+                fusion_name = "{}::{}".format(gene_id_to_name[g1], gene_id_to_name[g2])
+                print(fusion_name,bases1,bases2,sep="\t",file=sys.stderr)
+
                 header = ">{0} depth={1} cdna {10} {11} source_gene1={2} source_gene2={3} breakpoints={4}-{5}:{6}-{7} source_transcript1={8} source_transcript2={9}" \
                             .format(fusion_transcript_id, max_depth1, g1, g2, chr1, chr2, pos1, pos2, \
                                 max_depth_transcript1,max_depth_transcript2, fusion_gene_id, fusion_name)
                 print(header, file=whand)
                 print(fusion_sequence, file=whand)
-
+                
+                print(fusion_gene_id,fusion_transcript_id,fusion_name,sep="\t",file=ihand)
+                fusion_transcript_index+=1
         else:
             pass
-        
-
 
 if __name__ == "__main__":
     exit(main(len(sys.argv),sys.argv))

@@ -258,6 +258,7 @@ rule reads_info:
     input:
         fastqs = ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{}.reads.fastq'.format(batches_d,x) for x in range(int(config["badread"]["batches"]))],
         gtf    = config['annotations']['gtf'],
+        fus_index  = '{}/{{sample}}.cdna.fused.tsv'.format(reads_d),
     output:
         tsv   = '{}/{{sample}}.L-{{degradation_level}}.tsv'.format(reads_d),
         fastq = '{}/{{sample}}.L-{{degradation_level}}.fastq'.format(reads_d),
@@ -274,6 +275,11 @@ rule reads_info:
         tid_to_info = dict(
             non={f:'NA' for f in t_headers}
         )
+
+        for line in open(input.fus_index):
+            line = line.rstrip()
+            fields = line.split('\t')
+            tid_to_info[fields[1]] = { x:y for x,y in zip(t_headers,fields)}
         for line in open(input.gtf):
             if line[0] == '#':
                 continue
