@@ -50,9 +50,9 @@ def sample_with_replacement(seq_len, slope, intercept, depth, points=1000):
 	all_lens = []
 	cur_len = seq_len
 	for i in range(points):
-		if i % 50 == 0:
-			percentage = cur_len/seq_len
-			print('{:6.2f}% {:5}nt: {}'.format(percentage*100, cur_len, '*'*ceil(50*percentage)))
+		# if i % 100 == 0:
+		# 	percentage = cur_len/seq_len
+		# 	print('{:6.2f}% {:5}nt: {}'.format(percentage*100, cur_len, '*'*ceil(50*percentage)))
 		# print('-'*200*int())
 		all_lens.append(cur_len)
 		cur_len = max(intercept, cur_len - slope)
