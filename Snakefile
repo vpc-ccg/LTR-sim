@@ -25,6 +25,9 @@ localrules:
 
 rule all:
     input:
+        expand('refs/{species}/{species}.{ref_type}',
+            species=config['refs'], 
+            ref_type=['annot.gtf', 'cdna.fa', 'dna.fa', 'cdna.fa.fai', 'dna.fa.fai']),
         expand('{}/{{sample}}.cdna.paf'.format(map_d),
                sample=config['samples'],),
         expand('{}/{{sample}}.expression_rate.tsv'.format(train_d),
@@ -74,7 +77,7 @@ rule download_ref:
     output:
         'refs/{species}/{species}.{ref_type}'
     wildcard_constraints:
-        ref_type='annot\.gtf|cdna\.fa'
+        ref_type='annot\.gtf|cdna\.fa|dna\.fa'
     params:
         link = lambda wildcards: config['refs'][wildcards.species][wildcards.ref_type]
     shell:
@@ -87,7 +90,7 @@ rule index_ref:
     output:
         index = 'refs/{species}/{species}.{ref_type}.fai'
     wildcard_constraints:
-        ref_type='cdna\.fa'
+        ref_type='cdna\.fa|dna\.fa'
     shell:
         'samtools faidx {input.fasta}'
 

@@ -1,3 +1,0 @@
-ln -s /groups/hachgrp/projects/ana-22rv1/raw-data/wts/fastq/P000R000/P000R000.pass.fastq P000S000.P000R000.pass.fastq
-ln -s /groups/hachgrp/projects/ana-22rv1/raw-data/wts/fastq/P000R001/P000R001.pass.fastq P000S000.P000R001.pass.fastq
-ln -s /groups/hachgrp/projects/ana-22rv1/raw-data/wts/fastq/P000R002/P000R002.pass.fastq P000S000.P000R002.pass.fastq
