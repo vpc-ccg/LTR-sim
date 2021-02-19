@@ -2,6 +2,8 @@ configfile: 'config.yaml'
 
 import os
 import sys
+import requests
+import gzip
 
 sys.setrecursionlimit(100)
 def get_abs_path(path):
@@ -73,16 +75,77 @@ rule git_badread:
     shell:
         'git clone --branch {tag} {url} extern/Badread'.format(tag=config['badread']['tag'], url=config['badread']['url'])
 
-rule download_ref:
+rule download_dna:
     output:
-        'refs/{species}/{species}.{ref_type}'
-    wildcard_constraints:
-        ref_type='annot\.gtf|cdna\.fa|dna\.fa'
+        outfile='refs/{species}/{species}.dna.fa'
     params:
-        link = lambda wildcards: config['refs'][wildcards.species][wildcards.ref_type]
-    shell:
-        'wget -O {output}.gz {params.link} && '
-        'gunzip {output}.gz'
+        link = lambda wildcards: config['refs'][wildcards.species]['dna.fa']
+    run:
+        print('downloading:', params.link)
+        open('{}.gz'.format(output), 'wb').write(requests.get(params.link, allow_redirects=True).content)
+        flag = True
+        outfile = open(output.outfile, 'w+')
+        print('writing to file:', output)
+        for line in gzip.open('{}.gz'.format(output), 'rt'):
+            if line[0] == '>':
+                flag = not any((f in line) for f in config['refs'][wildcards.species]['dna_contig_filter'])
+            if flag:
+                outfile.write(line)
+        outfile.close()
+        os.remove('{}.gz'.format(output))
+
+rule download_annot:
+    input:
+        index = 'refs/{species}/{species}.dna.fa.fai'
+    output:
+        outfile='refs/{species}/{species}.annot.gtf'
+    params:
+        link = lambda wildcards: config['refs'][wildcards.species]['annot.gtf']
+    run:
+        print('downloading:', params.link)
+        open('{}.gz'.format(output), 'wb').write(requests.get(params.link, allow_redirects=True).content)
+        flag = True
+        outfile = open(output.outfile, 'w+')
+        contigs = {l.split()[0] for l in open(input.index)}
+        print('writing to file:', output)
+        for line in gzip.open('{}.gz'.format(output), 'rt'):
+            if line[0]=='#' or line.split('\t')[0] in contigs:
+                outfile.write(line)
+        outfile.close()
+        os.remove('{}.gz'.format(output))
+
+
+rule download_cdna:
+    input:
+        annot = 'refs/{species}/{species}.annot.gtf'
+    output:
+        outfile='refs/{species}/{species}.cdna.fa'
+    params:
+        link = lambda wildcards: config['refs'][wildcards.species]['cdna.fa']
+    run:
+        print('downloading:', params.link)
+        open('{}.gz'.format(output), 'wb').write(requests.get(params.link, allow_redirects=True).content)
+        tids = set()
+        for l in open(input.annot):
+            if l[0]=='#':
+                continue
+            l = l.rstrip().split('\t')
+            if l[2]!='transcript':
+                continue
+            info = l[8]
+            info = [x.strip().split(' ') for x in info.strip(';').split(';')]
+            info = {x[0]:x[1].strip('"') for x in info}
+            tids.add(info['transcript_id'])
+        outfile = open(output.outfile, 'w+')
+        print('writing to file:', output)
+        for line in gzip.open('{}.gz'.format(output), 'rt'):
+            if line[0]=='>':
+                flag = line.split()[0][1:] in tids
+            if flag:
+                outfile.write(line)
+        outfile.close()
+        os.remove('{}.gz'.format(output))
+
 
 rule index_ref:
     input:

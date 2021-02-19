@@ -11,12 +11,7 @@ samples:
         ref: drosophila_melanogaster
         degradation_level: non
         chroms:
-            - 2L
-            - 2R
-            - 3L
-            - 3R
-            - 4
-            - X
+            - All_chroms
         genes:
             - All_genes
 
@@ -48,10 +43,14 @@ refs:
         dna.fa    : http://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz
         cdna.fa   : http://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
         annot.gtf : http://ftp.ensembl.org/pub/release-97/gtf/drosophila_melanogaster/Drosophila_melanogaster.BDGP6.22.97.gtf.gz
+        dna_contig_filter:
+            - dna:scaffold
     drosophila_melanogaster:
         dna.fa    : http://ftp.ensembl.org/pub/release-97/fasta/drosophila_melanogaster/dna/Drosophila_melanogaster.BDGP6.22.dna.toplevel.fa.gz
         cdna.fa   : http://ftp.ensembl.org/pub/release-97/fasta/drosophila_melanogaster/cdna/Drosophila_melanogaster.BDGP6.22.cdna.all.fa.gz
         annot.gtf : http://ftp.ensembl.org/pub/release-97/gtf/drosophila_melanogaster/Drosophila_melanogaster.BDGP6.22.97.gtf.gz
+        dna_contig_filter:
+            - dna:scaffold
 
 badread:
     batches  : 5
