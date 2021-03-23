@@ -13,7 +13,8 @@ def get_abs_path(path):
 def make_slurm():
     os.makedirs('slurm'.format(outpath), mode=0o777, exist_ok=True)
 
-outpath = get_abs_path(config['outpath'])
+# outpath = get_abs_path(config['outpath'])
+outpath = config['outpath']
 make_slurm()
 
 map_d     = '{}/map'.format(outpath)
@@ -40,21 +41,21 @@ rule all:
                sample=config['samples'],),
         ['{dir}/{s}.cdna.polyA.degraded-{dl}.fasta'.format(
             dir=reads_d, s=s, dl=config['samples'][s]['degradation_level']) for s in config['samples']],
-        ['{dir}/{s}.cdna.polyA.degraded-{dl}.batch-{b}.fasta'.format(
+        ['{dir}/{s}.cdna.polyA.degraded-{dl}/batch-{b}.fasta'.format(
             dir=batches_d, 
             s=s, 
             dl=config['samples'][s]['degradation_level'],
             b=b,
             )
             for s in config['samples'] for b in range(config['badread']['batches'])],
-        ['{dir}/{s}.cdna.polyA.degraded-{dl}.batch-{b}.cov.txt'.format(
+        ['{dir}/{s}.cdna.polyA.degraded-{dl}/batch-{b}.cov.txt'.format(
             dir=batches_d, 
             s=s, 
             dl=config['samples'][s]['degradation_level'],
             b=b,
             )
             for s in config['samples'] for b in range(config['badread']['batches'])],
-        ['{dir}/{s}.cdna.polyA.degraded-{dl}.batch-{b}.reads.fastq'.format(
+        ['{dir}/{s}.cdna.polyA.degraded-{dl}/batch-{b}.reads.fastq'.format(
             dir=batches_d, 
             s=s, 
             dl=config['samples'][s]['degradation_level'],
@@ -82,7 +83,7 @@ rule download_dna:
         link = lambda wildcards: config['refs'][wildcards.species]['dna.fa']
     run:
         print('downloading:', params.link)
-        open('{}.gz'.format(output), 'wb').write(requests.get(params.link, allow_redirects=True).content)
+        os.system('wget {} -O {}.gz'.format(params.link, output))
         flag = True
         outfile = open(output.outfile, 'w+')
         print('writing to file:', output)
@@ -103,7 +104,7 @@ rule download_annot:
         link = lambda wildcards: config['refs'][wildcards.species]['annot.gtf']
     run:
         print('downloading:', params.link)
-        open('{}.gz'.format(output), 'wb').write(requests.get(params.link, allow_redirects=True).content)
+        os.system('wget {} -O {}.gz'.format(params.link, output))
         flag = True
         outfile = open(output.outfile, 'w+')
         contigs = {l.split()[0] for l in open(input.index)}
@@ -124,7 +125,7 @@ rule download_cdna:
         link = lambda wildcards: config['refs'][wildcards.species]['cdna.fa']
     run:
         print('downloading:', params.link)
-        open('{}.gz'.format(output), 'wb').write(requests.get(params.link, allow_redirects=True).content)
+        os.system('wget {} -O {}.gz'.format(params.link, output))
         tids = set()
         for l in open(input.annot):
             if l[0]=='#':
@@ -140,7 +141,11 @@ rule download_cdna:
         print('writing to file:', output)
         for line in gzip.open('{}.gz'.format(output), 'rt'):
             if line[0]=='>':
-                flag = line.split()[0][1:] in tids
+                line = line.split()
+                tid = line[0][1:].split('.')[0]
+                line[0] = '>{}'.format(tid)
+                line = ' '.join(line)+'\n'
+                flag = tid in tids
             if flag:
                 outfile.write(line)
         outfile.close()
@@ -321,14 +326,14 @@ rule batch_fasta:
         split_file      = config['exec']['split_file'],
         cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d)
     output:
-        ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{}.fasta'.format(batches_d,b) for b in range(int(config["badread"]["batches"]))]
+        ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{}.fasta'.format(batches_d,b) for b in range(int(config["badread"]["batches"]))]
     wildcard_constraints:
         sample='|'.join(config['samples']),
         degradation_level='|'.join(config['degradation_level'])
     params:
         lines_per_fasta = 2,
         batches = config["badread"]["batches"],
-        out_pattern = lambda wildcards: '{}/{}.cdna.polyA.degraded-{}.batch-{{}}.fasta'.format(
+        out_pattern = lambda wildcards: '{}/{}.cdna.polyA.degraded-{}/batch-{{}}.fasta'.format(
             batches_d,
             wildcards.sample,
             config['samples'][wildcards.sample]['degradation_level']),
@@ -337,9 +342,9 @@ rule batch_fasta:
 
 rule batched_get_throughput:
     input:
-        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(batches_d)
+        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{{bid}}.fasta'.format(batches_d)
     output:
-        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.cov.txt'.format(batches_d)
+        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{{bid}}.cov.txt'.format(batches_d)
     wildcard_constraints:
         sample='|'.join(config['samples']),
         degradation_level='|'.join(config['degradation_level']),
@@ -365,10 +370,10 @@ rule batched_generate_reads:
         'conda.env'
     input:
         badread             = config['exec']['badread'],
-        cdna_A_degraded     = temp('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(batches_d)),
-        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.cov.txt'.format(batches_d)
+        cdna_A_degraded     = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{{bid}}.fasta'.format(batches_d),
+        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{{bid}}.cov.txt'.format(batches_d)
     output:
-        fastq               = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.reads.fastq'.format(batches_d),
+        fastq               = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{{bid}}.reads.fastq'.format(batches_d),
     wildcard_constraints:
         sample='|'.join(config['samples']),
         degradation_level='|'.join(config['degradation_level']),
@@ -383,7 +388,7 @@ rule batched_generate_reads:
 
 rule reads_info:
     input:
-        fastqs = ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{}.reads.fastq'.format(batches_d,x) for x in range(int(config["badread"]["batches"]))],
+        fastqs = ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{}.reads.fastq'.format(batches_d,x) for x in range(int(config["badread"]["batches"]))],
         gtf  = lambda wildcards: 'refs/{s}/{s}.annot.gtf'.format(s=config['samples'][wildcards.sample]['ref']),
     output:
         tsv   = '{}/{{sample}}.L-{{degradation_level}}.tsv'.format(reads_d),
