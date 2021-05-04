@@ -31,37 +31,37 @@ rule all:
         expand('refs/{species}/{species}.{ref_type}',
             species=config['refs'], 
             ref_type=['annot.gtf', 'cdna.fa', 'dna.fa', 'cdna.fa.fai', 'dna.fa.fai']),
-        expand('{}/{{sample}}.cdna.paf'.format(map_d),
-               sample=config['samples'],),
-        expand('{}/{{sample}}.expression_rate.tsv'.format(train_d),
-               sample=config['samples'],),
-        expand('{}/{{sample}}.cdna.fasta'.format(reads_d),
-               sample=config['samples'],),
-        expand('{}/{{sample}}.cdna.polyA.fasta'.format(reads_d),
-               sample=config['samples'],),
-        ['{dir}/{s}.cdna.polyA.degraded-{dl}.fasta'.format(
-            dir=reads_d, s=s, dl=config['samples'][s]['degradation_level']) for s in config['samples']],
-        ['{dir}/{s}.cdna.polyA.degraded-{dl}/batch-{b}.fasta'.format(
-            dir=batches_d, 
-            s=s, 
-            dl=config['samples'][s]['degradation_level'],
-            b=b,
-            )
-            for s in config['samples'] for b in range(config['badread']['batches'])],
-        ['{dir}/{s}.cdna.polyA.degraded-{dl}/batch-{b}.cov.txt'.format(
-            dir=batches_d, 
-            s=s, 
-            dl=config['samples'][s]['degradation_level'],
-            b=b,
-            )
-            for s in config['samples'] for b in range(config['badread']['batches'])],
-        ['{dir}/{s}.cdna.polyA.degraded-{dl}/batch-{b}.reads.fastq'.format(
-            dir=batches_d, 
-            s=s, 
-            dl=config['samples'][s]['degradation_level'],
-            b=b,
-            )
-            for s in config['samples'] for b in range(config['badread']['batches'])],
+        # expand('{}/{{sample}}.cdna.paf'.format(map_d),
+        #        sample=config['samples'],),
+        # expand('{}/{{sample}}.expression_rate.tsv'.format(train_d),
+        #        sample=config['samples'],),
+        # expand('{}/{{sample}}.cdna.fasta'.format(reads_d),
+        #        sample=config['samples'],),
+        # expand('{}/{{sample}}.cdna.polyA.fasta'.format(reads_d),
+        #        sample=config['samples'],),
+        # ['{dir}/{s}.cdna.polyA.degraded-{dl}.fasta'.format(
+        #     dir=reads_d, s=s, dl=config['samples'][s]['degradation_level']) for s in config['samples']],
+        # ['{dir}/{s}.cdna.polyA.degraded-{dl}/batch-{b}.fasta'.format(
+        #     dir=batches_d, 
+        #     s=s, 
+        #     dl=config['samples'][s]['degradation_level'],
+        #     b=b,
+        #     )
+        #     for s in config['samples'] for b in range(config['badread']['batches'])],
+        # ['{dir}/{s}.cdna.polyA.degraded-{dl}/batch-{b}.cov.txt'.format(
+        #     dir=batches_d, 
+        #     s=s, 
+        #     dl=config['samples'][s]['degradation_level'],
+        #     b=b,
+        #     )
+        #     for s in config['samples'] for b in range(config['badread']['batches'])],
+        # ['{dir}/{s}.cdna.polyA.degraded-{dl}/batch-{b}.reads.fastq'.format(
+        #     dir=batches_d, 
+        #     s=s, 
+        #     dl=config['samples'][s]['degradation_level'],
+        #     b=b,
+        #     )
+        #     for s in config['samples'] for b in range(config['badread']['batches'])],
         ['{dir}/{s}.L-{dl}.{ext}'.format(
             dir=reads_d, 
             s=s, 
