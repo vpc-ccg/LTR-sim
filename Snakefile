@@ -4,6 +4,7 @@ import os
 import sys
 import requests
 import gzip
+import re
 
 sys.setrecursionlimit(100)
 def get_abs_path(path):
@@ -22,6 +23,12 @@ train_d   = '{}/train'.format(outpath)
 reads_d   = '{}/reads'.format(outpath)
 batches_d = '{}/batches'.format(reads_d)
 
+not_preset_samples = list()
+for s in config['samples']:
+    if not os.path.exists('{}/{}.expression_rate.tsv'.format(train_d, s)):
+        not_preset_samples.append(not_preset_samples)
+print(not_preset_samples)
+
 localrules:
     all,
     batched_get_throughput
@@ -31,37 +38,6 @@ rule all:
         expand('refs/{species}/{species}.{ref_type}',
             species=config['refs'], 
             ref_type=['annot.gtf', 'cdna.fa', 'dna.fa', 'cdna.fa.fai', 'dna.fa.fai']),
-        # expand('{}/{{sample}}.cdna.paf'.format(map_d),
-        #        sample=config['samples'],),
-        # expand('{}/{{sample}}.expression_rate.tsv'.format(train_d),
-        #        sample=config['samples'],),
-        # expand('{}/{{sample}}.cdna.fasta'.format(reads_d),
-        #        sample=config['samples'],),
-        # expand('{}/{{sample}}.cdna.polyA.fasta'.format(reads_d),
-        #        sample=config['samples'],),
-        # ['{dir}/{s}.cdna.polyA.degraded-{dl}.fasta'.format(
-        #     dir=reads_d, s=s, dl=config['samples'][s]['degradation_level']) for s in config['samples']],
-        # ['{dir}/{s}.cdna.polyA.degraded-{dl}/batch-{b}.fasta'.format(
-        #     dir=batches_d, 
-        #     s=s, 
-        #     dl=config['samples'][s]['degradation_level'],
-        #     b=b,
-        #     )
-        #     for s in config['samples'] for b in range(config['badread']['batches'])],
-        # ['{dir}/{s}.cdna.polyA.degraded-{dl}/batch-{b}.cov.txt'.format(
-        #     dir=batches_d, 
-        #     s=s, 
-        #     dl=config['samples'][s]['degradation_level'],
-        #     b=b,
-        #     )
-        #     for s in config['samples'] for b in range(config['badread']['batches'])],
-        # ['{dir}/{s}.cdna.polyA.degraded-{dl}/batch-{b}.reads.fastq'.format(
-        #     dir=batches_d, 
-        #     s=s, 
-        #     dl=config['samples'][s]['degradation_level'],
-        #     b=b,
-        #     )
-        #     for s in config['samples'] for b in range(config['badread']['batches'])],
         ['{dir}/{s}.L-{dl}.{ext}'.format(
             dir=reads_d, 
             s=s, 
@@ -192,6 +168,8 @@ rule expression_rate:
         paf = '{}/{{sample}}.cdna.paf'.format(map_d)
     output:
         exp = '{}/{{sample}}.expression_rate.tsv'.format(train_d)
+    wildcard_constraints:
+        sample = '|'.join(re.escape(s) for s in not_preset_samples + ['$^'])
     run:
         print('Capturing expression rate from: {}'.format(input.paf))
         tid_to_rcnt = dict()
@@ -213,10 +191,9 @@ rule expression_rate:
 
 rule sim_transcriptome:
     input:
-        reads = lambda wildcards: config['samples'][wildcards.sample]['reads'],
         cdna = lambda wildcards: 'refs/{s}/{s}.cdna.fa'.format(s=config['samples'][wildcards.sample]['ref']),
         gtf  = lambda wildcards: 'refs/{s}/{s}.annot.gtf'.format(s=config['samples'][wildcards.sample]['ref']),
-        exp  = '{}/{{sample}}.expression_rate.tsv'.format(train_d)
+        exp  = ancient('{}/{{sample}}.expression_rate.tsv'.format(train_d))
     output:
         cdna = '{}/{{sample}}.cdna.fasta'.format(reads_d)
     run:
