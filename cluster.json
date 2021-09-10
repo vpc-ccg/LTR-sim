@@ -7,6 +7,14 @@
         "name" : "ltr_sim",
         "p" : "long,big-mem,normal,express",
     },
+    "shuffle_reads" :
+    {
+        "time" : "05:59:00",
+        "mem" : "700GB",
+        "c" : 64,
+        "name" : "shuffastq",
+        "p" : "express,normal",
+    },
     "generate_reads" :
     {
         "time" : "23:59:00",

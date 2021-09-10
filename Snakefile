@@ -37,10 +37,13 @@ rule all:
         #        sample=config['samples'],
         #        degradation_level=config['degradation_level'],
         #        bid=list(range(config['badread']['batches']))),
-        expand('{}/{{sample}}.L-{{degradation_level}}.{{extension}}'.format(reads_d),
+        f1=expand('{}/{{sample}}.L-{{degradation_level}}.{{extension}}'.format(reads_d),
                sample=config['samples'],
                degradation_level=config['degradation_level'],
                extension=['fastq','tsv']),
+        frp=expand('{}/{{sample}}.R-{{degradation_level}}.fastq'.format(reads_d),
+               sample=config['samples'],
+               degradation_level=config['degradation_level']),
 
 rule git_badread:
     output:
@@ -138,18 +141,38 @@ rule sim_transcriptome:
             print(''.join(seq), file=outfile)
         outfile.close()
 
+rule prep_rt_tsv:
+    input:
+        make_rt=config["exec"]["makert"],
+        rt_file=config["fusionsim"]["rtfile"],
+        gtf    = config['annotations']['gtf'],
+    output:
+        tsv  = '{}/{{sample}}.rt.tsv'.format(reads_d),
+    shell:
+        "PYTHONHASHSEED=0 python {input.make_rt} {input.rt_file} {input.gtf} {output.tsv}"
+rule merge_fusion_and_rt_tsv:
+    input:
+        fus = config['fusionsim']['fusion_info'],
+        rt = '{}/{{sample}}.rt.tsv'.format(reads_d),
+    output:
+        '{}/{{sample}}.fusion_and_rt.tsv'.format(reads_d),
+    shell:
+        "cat {input.fus} {input.rt} > {output}"
 rule fuse_genes:
     input:
         make_fusions = config['exec']['fuser'],
         cdna  = '{}/{{sample}}.cdna.fasta'.format(reads_d),
         gtf    = config['annotations']['gtf'],
-        fusion_info    = config['fusionsim']['fusion_info'],
+        fusion_info='{}/{{sample}}.fusion_and_rt.tsv'.format(reads_d),
+    #    fusion_info    = config['fusionsim']['fusion_info'],
     output:
         cdna  = '{}/{{sample}}.cdna.fused.fasta'.format(reads_d),
         fus_index  = '{}/{{sample}}.cdna.fused.tsv'.format(reads_d),
+    params:
+        valid_chrs = ",".join([str(x) for x in config["chroms"]])
     shell:
         'PYTHONHASHSEED=0 python3 {input.make_fusions} {input.cdna}'
-        ' {input.gtf} {input.fusion_info} {output.cdna} {output.fus_index}'
+        ' {input.gtf} {input.fusion_info} {output.cdna} {output.fus_index} {params.valid_chrs}'
 rule add_poly_A:
     conda:
         'conda.env'
@@ -248,11 +271,34 @@ rule batched_generate_reads:
     params:
         # coverage = config['badread']['coverage'],
         seed     = config['seed'],
+        other_params = " --force_strand "
     shell:
-        'PYTHONHASHSEED=0 {input.badread} simulate --seed {params.seed} --length 100000,0'
+        'PYTHONHASHSEED=0 {input.badread} simulate {params.other_params} --seed {params.seed} --length 100000,0'
         '   --reference {input.cdna_A_degraded} --quantity $(cat {input.cdna_A_degraded_cov})x'
         '   --chimeras 0 --random_reads 0 --junk_reads 0 --glitches 0,0,0'
         '   > {output.fastq}'
+
+rule randomly_pair:
+    input:
+        fastq  = '{}/{{sample}}.S-{{degradation_level}}.fastq'.format(reads_d),
+        script = config["exec"]["randomly_pair"],
+    output:
+        fastq = '{}/{{sample}}.R-{{degradation_level}}.fastq'.format(reads_d),
+        index = '{}/{{sample}}.R-{{degradation_level}}.fastq.rpindex'.format(reads_d),
+    params:
+        pair_ratio=config["fusionsim"]["random_pair_ratio"],
+    shell:
+        "python {input.script} {input.fastq} {params.pair_ratio} {output.fastq} {output.index}"
+    
+rule shuffle_reads:
+    input:
+       fastq = '{}/{{sample}}.L-{{degradation_level}}.fastq'.format(reads_d) 
+    output:
+       fastq = '{}/{{sample}}.S-{{degradation_level}}.fastq'.format(reads_d)
+    threads:
+        15
+    shell:
+        "cat {input.fastq} | seqkit shuffle -j15 > {output.fastq}"
 
 rule reads_info:
     input:

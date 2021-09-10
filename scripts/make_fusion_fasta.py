@@ -28,10 +28,13 @@ def main(argc, argv):
     fusion_info_file = argv[3]
     output_file = argv[4]
     fusion_index_file = argv[5]
+    valid_chrs = {x for x in argv[6].split(",")}
     fusion_modes = {
         "WILDTYPES",
         "DISTRIBUTE"
     }
+    
+    RT_EXPRESS_RATIO = 0.05
     fuse_strategy = "WILDTYPES"
 
     fusions = []
@@ -44,9 +47,15 @@ def main(argc, argv):
 
             g1 = fields[8]
             g2 = fields[9]
-            
+           
+
             chr1 = fields[0]
             chr2 = fields[3]
+
+            if chr1 not in valid_chrs:
+                continue
+            if chr2 not in valid_chrs:
+                continue
 
             pos1 = int(fields[1])
             pos2 = int(fields[4])
@@ -127,7 +136,11 @@ def main(argc, argv):
                 #print(seq.rstrip(),file=whand)
                 fused_seqs[transcript] = (header,seq,depth,gene)
                 if fusion_genes[gene][6] != "1/1": #Genotype
-                    print(hfil[0],"depth={}".format(int(depth/2)),sep=" ",end=" ",file=whand)
+                    if  fusion_genes[gene][6] == "r/t":
+                        d = depth
+                    else:
+                        d = int(depth / 2) + 1
+                    print(hfil[0],"depth={}".format(d),sep=" ",end=" ",file=whand)
                     print(" ".join(hfil[2:]),file=whand)
                     print(seq,file=whand)
             else:
@@ -135,7 +148,11 @@ def main(argc, argv):
                 print(seq,file=whand)
             line = hand.readline()
             #if transcript not in fusion_genes:
+
         fusion_transcript_index = 0
+        rt_tr_index = 0
+        rt_ge_index = 0
+        fusion_gene_index = 0
         if fuse_strategy == "DISTRIBUTE":
             for f in fusions:
                 pass
@@ -193,7 +210,8 @@ def main(argc, argv):
 
                 breakpoint1 = f[4]
                 breakpoint2 = f[5]
-                
+                chr1 = f[2]
+                chr2 = f[3]
 
                 fusion_sequence = ""
 
@@ -202,8 +220,10 @@ def main(argc, argv):
                 if s1 == s2: #deletion cases
                     bases1=get_base_count(exons1,breakpoint1,s1 == "+")
                     fusion_sequence += fused_seqs[max_depth_transcript1][1][:bases1]
-                    
+                    print(g1,exons1, breakpoint1, s1, sep="\t", file=sys.stderr)
+
                     bases2=get_base_count(exons2,breakpoint2,s1 != "+")
+                    print(g2,exons2, breakpoint2, s2, sep="\t", file=sys.stderr)
                     fusion_sequence += fused_seqs[max_depth_transcript2][1][-bases2:]
 
                 else: #inversion cases
@@ -218,26 +238,42 @@ def main(argc, argv):
 
                     else:
                         bases1=get_base_count(exons1,breakpoint1,False)
-                        fusion_sequence += fused_seqs[max_depth_transcript2][1][:bases2]
+                        fusion_sequence += fused_seqs[max_depth_transcript2][1][:bases1]
 
                         bases2=get_base_count(exons2,breakpoint2,False)
-                        fusion_sequence += fused_seqs[max_depth_transcript1][1][-bases1:]
+                        fusion_sequence += fused_seqs[max_depth_transcript1][1][-bases2:]
 
 
+                if f[6] == "r/t":
+                    max_depth1 = int( max_depth1 * RT_EXPRESS_RATIO) + 1
+                    transcript_id_base = "RTHT"
+                    gene_id_base = "RTHG"
 
-                fusion_gene_id = "FUSG{0:011}".format(fusion_index)
-                fusion_transcript_id = "FUST{0:011}".format(fusion_transcript_index)
+                    tran_index = rt_tr_index
+                    gene_index = rt_ge_index
+                    rt_tr_index +=1
+                    rt_ge_index +=1
+                else:
+                    transcript_id_base = "FUST"
+                    gene_id_base = "FUSG"
+                    tran_index = fusion_transcript_index 
+                    gene_index = fusion_gene_index
+
+                    fusion_transcript_index+=1
+                    fusion_gene_index+=1
+                fusion_gene_id = "{0}{1:011}".format(gene_id_base,gene_index)
+                fusion_transcript_id = "{0}{1:011}".format(transcript_id_base, tran_index)
                 fusion_name = "{}::{}".format(gene_id_to_name[g1], gene_id_to_name[g2])
                 print(fusion_name,bases1,bases2,sep="\t",file=sys.stderr)
 
                 header = ">{0} depth={1} cdna {10} {11} source_gene1={2} source_gene2={3} breakpoints={4}-{5}:{6}-{7} source_transcript1={8} source_transcript2={9}" \
-                            .format(fusion_transcript_id, max_depth1, g1, g2, chr1, chr2, pos1, pos2, \
+                            .format(fusion_transcript_id, max_depth1, g1, g2, chr1, chr2, breakpoint1, breakpoint2, \
                                 max_depth_transcript1,max_depth_transcript2, fusion_gene_id, fusion_name)
                 print(header, file=whand)
                 print(fusion_sequence, file=whand)
                 
                 print(fusion_gene_id,fusion_transcript_id,fusion_name,sep="\t",file=ihand)
-                fusion_transcript_index+=1
+
         else:
             pass
 
