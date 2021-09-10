@@ -1,88 +1,41 @@
 outpath:
-    /groups/hachgrp/projects/dev-genion/analysis/simulation-11mini/
+    output
+
 
 seed:
     42
 
 samples:
-    P000S000:
-        # Own data
-        - samples/P000S000.P000R000.pass.fastq
-        - samples/P000S000.P000R001.pass.fastq
-        - samples/P000S000.P000R002.pass.fastq
+   ERR3588905:
+        reads: samples/ERR3588905.fastq # This is where you should put the reads OR
+        SRA: ERR3588905                 #    add SRA ID here to for Snakemake to download the reads to the path specified by reads
+        ref: drosophila_melanogaster  # The ref must match the refs fields below
+        degradation_level: non        # The degradation_level must match the degradation_level fields below
+        chroms: # specify the name of contigs to simulate; add All_chroms to include all chroms
+            - All_chroms
+        genes:  # specify the ENSEMBL ID or gene name to simulate; add All_genes to include all chroms
+            - All_genes
+   22Rv1:
+        reads: samples/22Rv1.fastq
+        ref: homo_sapiens
+        degradation_level: non
+        chroms:
+            - All_chroms
+        genes:
+            - All_genes
 
-fusionsim:
-    fusion_info:
-        fusion_info.tsv
-    rtfile:
-        RT_events.tsv
-    random_pair_ratio:
-        0.01
-chroms:
-    - 1
-    - 7
-    - 8
-    - 9
-    - 10
-    - 11
-    - 12
-    - 15
-    - 16
-    - 17
-    - 18
-    - 19
-    - 21
-    - 22
-    - X
-all_chroms:
-    - 1
-    - 2
-    - 3
-    - 4
-    - 5
-    - 6
-    - 7
-    - 8
-    - 9
-    - 10
-    - 11
-    - 12
-    - 13
-    - 14
-    - 15
-    - 16
-    - 17
-    - 18
-    - 19
-    - 20
-    - 21
-    - 22
-    - X
-    - Y
-    - MT
-
-
-genes:
-    - All_genes
-    # - ENSG00000169083 # AR
-    # - ENSG00000187838 # PLSCR3
 
 exec:
-    ltrsim  : ./ltrsim.py
-    polyA   : scripts/polyA.py
-    degrade : scripts/degradation.py
-    badread : extern/Badread/badread-runner.py
+    polyA      : scripts/polyA.py
+    degrade    : scripts/degradation.py
     split_file : scripts/split_file.py
     fuser   : scripts/make_fusion_fasta.py
     makert   : scripts/readthrough_genes_to_tsv.py
     randomly_pair : scripts/make_random_pairings.py
+    badread    : extern/Badread/badread-runner.py
+
 degradation_level:
     non:
-        slope     : 0
-        intercept : 0
-    
-degrad_other:
-    nonREP:
         slope     : 0
         intercept : 0
     low:
@@ -98,24 +51,21 @@ polyA_config:
     mincut : 20
     maxcut : 150
 
-mapping_settings:
-    dna  : splice
-    cdna : map-ont
-
-references:
-    # ftp://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
-    dna      : refs/Homo_sapiens.GRCh38.dna.fa
-    dna_fai  : refs/Homo_sapiens.GRCh38.dna.fa.fai
-    # ftp://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz
-    cdna     : refs/Homo_sapiens.GRCh38.cdna.fa
-    cdna_fai : refs/Homo_sapiens.GRCh38.cdna.fa.fai
-
-annotations:
-    # ftp://ftp.ensembl.org/pub/release-97/gtf/homo_sapiens/Homo_sapiens.GRCh38.97.gtf.gz
-    gtf : refs/Homo_sapiens.GRCh38.gtf
+refs:
+    homo_sapiens:
+        dna.fa    : http://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+        cdna.fa   : http://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz
+        annot.gtf : http://ftp.ensembl.org/pub/release-97/gtf/homo_sapiens/Homo_sapiens.GRCh38.97.gtf.gz
+        dna_contig_filter:
+            - dna:scaffold # ignore dna contigs with this tag, useful to keep only fully assembled contigs
+    drosophila_melanogaster:
+        dna.fa    : http://ftp.ensembl.org/pub/release-97/fasta/drosophila_melanogaster/dna/Drosophila_melanogaster.BDGP6.22.dna.toplevel.fa.gz
+        cdna.fa   : http://ftp.ensembl.org/pub/release-97/fasta/drosophila_melanogaster/cdna/Drosophila_melanogaster.BDGP6.22.cdna.all.fa.gz
+        annot.gtf : http://ftp.ensembl.org/pub/release-97/gtf/drosophila_melanogaster/Drosophila_melanogaster.BDGP6.22.97.gtf.gz
+        dna_contig_filter:
+            - dna:scaffold 
 
 badread:
-    batches  : 16
+    batches  : 64
     url      : https://github.com/baraaorabi/Badread.git
     tag      : v0.1.5
-    coverage : 2x

@@ -10,10 +10,14 @@ def parse_args():
                         type=str,
                         required=True,
                         help="Input file")
-    parser.add_argument("-o",
-                        "--output-files",
-                        nargs='+',
+    parser.add_argument("-op",
+                        "--out-files-pattern",
                         type=str,
+                        required=True,
+                        help="Output file(s) list")
+    parser.add_argument("-b",
+                        "--batch-count",
+                        type=int,
                         required=True,
                         help="Output file(s) list")
     parser.add_argument("-l",
@@ -30,19 +34,25 @@ def main():
     assert(args.lines_per_record >= 1)
     lines = open(args.input, 'r').readlines()
     assert(len(lines)%args.lines_per_record==0)
-    record_cnt  = len(lines)/args.lines_per_record
-    outer_count = len(args.output_files)
-    records_per_outer  = ceil(record_cnt / outer_count)
-    line_num = 0
-    try:
-        for outer in args.output_files:
-            outer = open(outer, 'w+')
-            for _ in range(records_per_outer):
-                for _ in range(args.lines_per_record):
-                    print(lines[line_num], end='', file=outer)
-                    line_num+=1
-    except:
-        assert(line_num==len(lines))
+    record_cnt  = len(lines)//args.lines_per_record
+
+
+    old_bid = -1
+    for idx,line in enumerate(lines):
+        bid = int(args.batch_count*((idx//args.lines_per_record)/(len(lines)//args.lines_per_record)))
+        if old_bid == -1:
+            old_bid = bid
+            outer = open(args.out_files_pattern.format(bid), 'w+')
+            bid_cnt = 0
+        if old_bid != bid:
+            assert bid_cnt%args.lines_per_record==0
+            outer = open(args.out_files_pattern.format(bid), 'w+')
+            old_bid = bid
+            bid_cnt = 0
+        bid_cnt += 1
+        outer.write(lines[idx])
+    outer.close()
+    assert bid_cnt%args.lines_per_record==0
 
 if __name__ == "__main__":
     main()

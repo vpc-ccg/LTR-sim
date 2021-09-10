@@ -2,6 +2,9 @@ configfile: 'config.yaml'
 
 import os
 import sys
+import requests
+import gzip
+import re
 
 sys.setrecursionlimit(100)
 def get_abs_path(path):
@@ -11,39 +14,39 @@ def get_abs_path(path):
 def make_slurm():
     os.makedirs('slurm'.format(outpath), mode=0o777, exist_ok=True)
 
-outpath = get_abs_path(config['outpath'])
+# outpath = get_abs_path(config['outpath'])
+outpath = config['outpath']
 make_slurm()
-config['exec']['ltrsim'] = get_abs_path(config['exec']['ltrsim'])
 
 map_d     = '{}/map'.format(outpath)
 train_d   = '{}/train'.format(outpath)
 reads_d   = '{}/reads'.format(outpath)
 batches_d = '{}/batches'.format(reads_d)
 
+not_preset_samples = list()
+for s in config['samples']:
+    if not os.path.exists('{}/{}.expression_rate.tsv'.format(train_d, s)):
+        not_preset_samples.append(not_preset_samples)
+print(not_preset_samples)
+
 localrules:
     all,
     batched_get_throughput
-    
+
 rule all:
     input:
-        # expand('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d),
-        #        sample=config['samples'],
-        #        degradation_level=config['degradation_level'],),
-        # expand('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(batches_d),
-        #        sample=config['samples'],
-        #        degradation_level=config['degradation_level'],
-        #        bid=list(range(config['badread']['batches']))),
-        # expand('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.reads.fastq'.format(batches_d),
-        #        sample=config['samples'],
-        #        degradation_level=config['degradation_level'],
-        #        bid=list(range(config['badread']['batches']))),
-        f1=expand('{}/{{sample}}.L-{{degradation_level}}.{{extension}}'.format(reads_d),
-               sample=config['samples'],
-               degradation_level=config['degradation_level'],
-               extension=['fastq','tsv']),
-        frp=expand('{}/{{sample}}.R-{{degradation_level}}.fastq'.format(reads_d),
-               sample=config['samples'],
-               degradation_level=config['degradation_level']),
+        expand('refs/{species}/{species}.{ref_type}',
+            species=config['refs'], 
+            ref_type=['annot.gtf', 'cdna.fa', 'dna.fa', 'cdna.fa.fai', 'dna.fa.fai']),
+        ['{dir}/{s}.{runtype}-{dl}.{ext}'.format(
+            dir=reads_d, 
+            s=s, 
+            dl=config['samples'][s]['degradation_level'],
+            runtype="L",#R to introduce random pairings
+            ext=ext,
+            )
+            for s in config['samples'] for ext in ['fastq','tsv']],
+
 
 rule git_badread:
     output:
@@ -51,28 +54,124 @@ rule git_badread:
     shell:
         'git clone --branch {tag} {url} extern/Badread'.format(tag=config['badread']['tag'], url=config['badread']['url'])
 
-rule reads_to_bam:
+rule download_dna:
+    output:
+        outfile='refs/{species}/{species}.dna.fa'
+    params:
+        link = lambda wildcards: config['refs'][wildcards.species]['dna.fa']
+    run:
+        print('downloading:', params.link)
+        os.system('wget {} -O {}.gz'.format(params.link, output))
+        flag = True
+        outfile = open(output.outfile, 'w+')
+        print('writing to file:', output)
+        for line in gzip.open('{}.gz'.format(output), 'rt'):
+            if line[0] == '>':
+                flag = not any((f in line) for f in config['refs'][wildcards.species]['dna_contig_filter'])
+            if flag:
+                outfile.write(line)
+        outfile.close()
+        os.remove('{}.gz'.format(output))
+
+rule download_annot:
+    input:
+        index = 'refs/{species}/{species}.dna.fa.fai'
+    output:
+        outfile='refs/{species}/{species}.annot.gtf'
+    params:
+        link = lambda wildcards: config['refs'][wildcards.species]['annot.gtf']
+    run:
+        print('downloading:', params.link)
+        os.system('wget {} -O {}.gz'.format(params.link, output))
+        flag = True
+        outfile = open(output.outfile, 'w+')
+        contigs = {l.split()[0] for l in open(input.index)}
+        print('writing to file:', output)
+        for line in gzip.open('{}.gz'.format(output), 'rt'):
+            if line[0]=='#' or line.split('\t')[0] in contigs:
+                outfile.write(line)
+        outfile.close()
+        os.remove('{}.gz'.format(output))
+
+
+rule download_cdna:
+    input:
+        annot = 'refs/{species}/{species}.annot.gtf'
+    output:
+        outfile='refs/{species}/{species}.cdna.fa'
+    params:
+        link = lambda wildcards: config['refs'][wildcards.species]['cdna.fa']
+    run:
+        print('downloading:', params.link)
+        os.system('wget {} -O {}.gz'.format(params.link, output))
+        tids = set()
+        for l in open(input.annot):
+            if l[0]=='#':
+                continue
+            l = l.rstrip().split('\t')
+            if l[2]!='transcript':
+                continue
+            info = l[8]
+            info = [x.strip().split(' ') for x in info.strip(';').split(';')]
+            info = {x[0]:x[1].strip('"') for x in info}
+            tids.add(info['transcript_id'])
+        outfile = open(output.outfile, 'w+')
+        print('writing to file:', output)
+        for line in gzip.open('{}.gz'.format(output), 'rt'):
+            if line[0]=='>':
+                line = line.split()
+                tid = line[0][1:].split('.')[0]
+                line[0] = '>{}'.format(tid)
+                line = ' '.join(line)+'\n'
+                flag = tid in tids
+            if flag:
+                outfile.write(line)
+        outfile.close()
+        os.remove('{}.gz'.format(output))
+
+
+rule index_ref:
+    input:
+        fasta = 'refs/{species}/{species}.{ref_type}'
+    output:
+        index = 'refs/{species}/{species}.{ref_type}.fai'
+    wildcard_constraints:
+        ref_type='cdna\.fa|dna\.fa'
+    shell:
+        'samtools faidx {input.fasta}'
+
+rule sra_download:
+    conda:
+        'conda.env'
+    output:
+        reads  = 'samples/{sample}.fastq',
+    params:
+        SRA = lambda wildcards: config['samples'][wildcards.sample]['SRA']
+    shell:
+        "fastq-dump --split-files {params.SRA} --stdout > {output.reads}"
+
+rule map_to_cdna:
     conda:
         'conda.env'
     input:
-        reads  = lambda wildcards: config['samples'][wildcards.sample],
-        target = lambda wildcards: config['references'][wildcards.target]
+        reads  = lambda wildcards: config['samples'][wildcards.sample]['reads'],
+        target = lambda wildcards: 'refs/{s}/{s}.cdna.fa'.format(s=config['samples'][wildcards.sample]['ref'])
     output:
-        paf = '{}/{{sample}}.{{target}}.paf'.format(map_d),
-    params:
-        mapping_settings = lambda wildcards: config['mapping_settings'][wildcards.target]
+        paf = '{}/{{sample}}.cdna.paf'.format(map_d),
     conda:
         'conda.env'
     threads:
         32
     shell:
-        'minimap2 -Y -x {params.mapping_settings} --eqx --MD -t {threads} {input.target} {input.reads} > {output.paf} '
+        'minimap2 -Y -x map-ont -t {threads} {input.target} {input.reads} > {output.paf} '
 
 rule expression_rate:
     input:
         paf = '{}/{{sample}}.cdna.paf'.format(map_d)
     output:
         exp = '{}/{{sample}}.expression_rate.tsv'.format(train_d)
+    wildcard_constraints:
+        sample = '|'.join(re.escape(s) for s in not_preset_samples + ['$^'])
     run:
         print('Capturing expression rate from: {}'.format(input.paf))
         tid_to_rcnt = dict()
@@ -85,7 +184,6 @@ rule expression_rate:
             if not 'tp:A:P' in line:
                 continue
             line = line.rstrip().split('\t')
-            # rid = l[0]
             tid = line[5].split('_')[-1].split('.')[0]
             tid_to_rcnt[tid] = tid_to_rcnt.get(tid, 0) + 1
         outfile = open(output.exp, 'w+')
@@ -95,45 +193,64 @@ rule expression_rate:
 
 rule sim_transcriptome:
     input:
-        cdna = config['references']['cdna'],
-        exp  = '{}/{{sample}}.expression_rate.tsv'.format(train_d)
+        cdna = lambda wildcards: 'refs/{s}/{s}.cdna.fa'.format(s=config['samples'][wildcards.sample]['ref']),
+        gtf  = lambda wildcards: 'refs/{s}/{s}.annot.gtf'.format(s=config['samples'][wildcards.sample]['ref']),
+        exp  = ancient('{}/{{sample}}.expression_rate.tsv'.format(train_d))
     output:
         cdna = '{}/{{sample}}.cdna.fasta'.format(reads_d)
     run:
-        print('Simulating transcriptome from {}'.format(input))
-        tid_to_rcnt = dict()
-        genes = set(config['genes'])
-        chroms = set([str(c) for c in config['chroms']])
+        print('Simulating transcriptome from \n{}'.format(input))
+        
+        genes = set([str(g) for g in config['samples'][wildcards.sample]['genes']])
+        chroms = set([str(c) for c in config['samples'][wildcards.sample]['chroms']])
+        any_chrom = 'All_chroms' in chroms
+        any_gene = 'All_genes' in genes
+        tids = set()
         print(chroms)
+        for line in open(input.gtf):
+            if line[0] == '#':
+                continue
+            line = line.rstrip()
+            line = line.split('\t')
+            if line[2] != 'transcript':
+                continue
+            chrom = line[0]
+            if not (any_chrom or chrom in chroms):
+                continue
+            info = {x.split()[0] : x.split()[1].strip('"') for x in line[8].strip('; ').split(';')}
+            if not (any_gene or info['gene_name'] in genes or info['gene_id'] in genes):
+                continue
+            tids.add(info['transcript_id'].split('.')[0])
+        print('Looking at generating {} transcripts'.format(len(tids)))
+        assert len(tids)>0
+        tid_to_rcnt = dict()
         for line in open(input.exp):
             line = line.rstrip().split('\t')
             tid = line[0]
+            if not tid in tids:
+                continue
             cnt = int(line[1])
             tid_to_rcnt[tid] = cnt
+        print('Only {} transcripts are experessed'.format(len(tid_to_rcnt)))
+        assert len(tid_to_rcnt)>0
         outfile = open(output.cdna, 'w+')
         seq=list()
+        flag = False
         for line in open(input.cdna):
             line = line.rstrip()
             if line[0] == '>':
                 if len(seq) > 0:
                     print(''.join(seq), file=outfile)
                     seq = list()
-                gene_name_field_name = 'gene:'
-                gene_name_field_sepa = '.'
-                gene_name = line[line.find(gene_name_field_name):]
-                gene_name = gene_name[len(gene_name_field_name) : gene_name.find(gene_name_field_sepa)]
-                chrom_name_field_name = 'chromosome:GRCh38:'
-                chrom_name_field_sepa = ':'
-                chrom_name = line[line.find(chrom_name_field_name) + len(chrom_name_field_name):].split(chrom_name_field_sepa)[0]
-                if not chrom_name in chroms or not ('All_genes' in genes or gene_name in genes):
-                    flag = False
-                    continue
-                flag = True
                 line = line[1:]
                 line = line.split()
                 tid = line[0].split('.')[0]
-                cnt = tid_to_rcnt.get(tid, 0) + 1
-                record = [tid, 'depth={}'.format(max(cnt,0))] + line[1:]
+                if not tid in tid_to_rcnt:
+                    flag = False
+                    continue
+                flag = True
+                cnt = tid_to_rcnt[tid]
+                record = [tid, 'depth={}'.format(cnt)] + line[1:]
                 print('>{}'.format(' '.join(record)), file=outfile)
             elif flag:
                 seq.append(line)
@@ -188,7 +305,7 @@ rule add_poly_A:
         maxcut = config['polyA_config']['maxcut'],
         seed   = config['seed'],
     shell:
-        'PYTHONHASHSEED=0 python {input.polyA} '
+        'PYTHONHASHSEED=0 python3 {input.polyA} '
         '   {input.cdna} {output.cdna_A}'
         '   {params.mean} {params.stddev}'
         '   {params.mincut} {params.maxcut}'
@@ -211,7 +328,7 @@ rule degrade:
         slope     = lambda wildcards: config['degradation_level'][wildcards.degradation_level]['slope'],
         seed      = config['seed'],
     shell:
-        'PYTHONHASHSEED=0 python {input.degrade}'
+        'PYTHONHASHSEED=0 python3 {input.degrade}'
         '   {input.cdna_A} {output.cdna_A_degraded}'
         '   {params.slope} {params.intercept}'
         '   {params.seed}'
@@ -221,20 +338,25 @@ rule batch_fasta:
         split_file      = config['exec']['split_file'],
         cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.fasta'.format(reads_d)
     output:
-        ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{}.fasta'.format(batches_d,x) for x in range(int(config["badread"]["batches"]))]
+        ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{}.fasta'.format(batches_d,b) for b in range(int(config["badread"]["batches"]))]
     wildcard_constraints:
         sample='|'.join(config['samples']),
         degradation_level='|'.join(config['degradation_level'])
     params:
-        lines_per_fasta = 2
+        lines_per_fasta = 2,
+        batches = config["badread"]["batches"],
+        out_pattern = lambda wildcards: '{}/{}.cdna.polyA.degraded-{}/batch-{{}}.fasta'.format(
+            batches_d,
+            wildcards.sample,
+            config['samples'][wildcards.sample]['degradation_level']),
     shell:
-        '{input.split_file} -i {input.cdna_A_degraded} -o {output} -l {params.lines_per_fasta}'
+        '{input.split_file} -i {input.cdna_A_degraded} -b {params.batches} -op {params.out_pattern} -l {params.lines_per_fasta}'
 
 rule batched_get_throughput:
     input:
-        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(batches_d)
+        cdna_A_degraded = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{{bid}}.fasta'.format(batches_d)
     output:
-        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.cov.txt'.format(batches_d)
+        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{{bid}}.cov.txt'.format(batches_d)
     wildcard_constraints:
         sample='|'.join(config['samples']),
         degradation_level='|'.join(config['degradation_level']),
@@ -260,16 +382,15 @@ rule batched_generate_reads:
         'conda.env'
     input:
         badread             = config['exec']['badread'],
-        cdna_A_degraded     = temp('{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.fasta'.format(batches_d)),
-        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.cov.txt'.format(batches_d)
+        cdna_A_degraded     = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{{bid}}.fasta'.format(batches_d),
+        cdna_A_degraded_cov = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{{bid}}.cov.txt'.format(batches_d)
     output:
-        fastq               = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{{bid}}.reads.fastq'.format(batches_d),
+        fastq               = '{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{{bid}}.reads.fastq'.format(batches_d),
     wildcard_constraints:
         sample='|'.join(config['samples']),
         degradation_level='|'.join(config['degradation_level']),
         bid='|'.join([str(b) for b in range(config['badread']['batches'])])
     params:
-        # coverage = config['badread']['coverage'],
         seed     = config['seed'],
         other_params = " --force_strand "
     shell:
@@ -302,8 +423,8 @@ rule shuffle_reads:
 
 rule reads_info:
     input:
-        fastqs = ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}.batch-{}.reads.fastq'.format(batches_d,x) for x in range(int(config["badread"]["batches"]))],
-        gtf    = config['annotations']['gtf'],
+        fastqs = ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{}.reads.fastq'.format(batches_d,x) for x in range(int(config["badread"]["batches"]))],
+        gtf  = lambda wildcards: 'refs/{s}/{s}.annot.gtf'.format(s=config['samples'][wildcards.sample]['ref']),
         fus_index  = '{}/{{sample}}.cdna.fused.tsv'.format(reads_d),
     output:
         tsv   = '{}/{{sample}}.L-{{degradation_level}}.tsv'.format(reads_d),

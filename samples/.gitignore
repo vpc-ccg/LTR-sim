@@ -1,3 +1,8 @@
-P000S000.P000R000.pass.fastq
-P000S000.P000R001.pass.fastq
-P000S000.P000R002.pass.fastq
+*.fastq
+*.fasta
+*.fq
+*.fa
+*.fastq.gz
+*.fasta.gz
+*.fq.gz
+*.fa.gz
