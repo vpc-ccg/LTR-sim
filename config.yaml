@@ -1,5 +1,5 @@
 outpath:
-    /groups/hachgrp/projects/dev-genion/analysis/simulation-21_22/
+    /groups/hachgrp/projects/dev-genion/analysis/simulation-11mini/
 
 seed:
     42
@@ -14,6 +14,26 @@ samples:
 fusionsim:
     fusion_info:
         fusion_info.tsv
+    rtfile:
+        RT_events.tsv
+    random_pair_ratio:
+        0.01
+chroms:
+    - 1
+    - 7
+    - 8
+    - 9
+    - 10
+    - 11
+    - 12
+    - 15
+    - 16
+    - 17
+    - 18
+    - 19
+    - 21
+    - 22
+    - X
 all_chroms:
     - 1
     - 2
@@ -41,9 +61,7 @@ all_chroms:
     - Y
     - MT
 
-chroms:
-    - 21
-    - 22
+
 genes:
     - All_genes
     # - ENSG00000169083 # AR
@@ -56,10 +74,14 @@ exec:
     badread : extern/Badread/badread-runner.py
     split_file : scripts/split_file.py
     fuser   : scripts/make_fusion_fasta.py
+    makert   : scripts/readthrough_genes_to_tsv.py
+    randomly_pair : scripts/make_random_pairings.py
 degradation_level:
     non:
         slope     : 0
         intercept : 0
+    
+degrad_other:
     nonREP:
         slope     : 0
         intercept : 0
