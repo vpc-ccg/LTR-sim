@@ -1,7 +1,37 @@
 import sys
 
-def get_base_count(exons, bp, forward):
 
+
+class ginterval:
+    def __init__(self, chr, start, end):
+        self.c    = chr
+        self.s  = start
+        self.e    = end
+    
+
+    def __str__(self):
+        return "{}:{}-{}".format(self.c, self.s, self.e)
+    def __repr__(self):
+        return __str__(self)
+    def range(self):
+        return (self.s, self.e)
+
+    def overlap_status(self,ival):
+        if ival[1] <= self.s:
+            return "BEFORE"
+        if ival[0] >= self.e:
+            return "AFTER"
+        if ival[0] >= self.s and ival[1] <= self.e:
+            return "IN"
+        if ival[0] < self.s and ival[1] > self.e:
+            return "AROUND"
+        if ival[0] < self.s and ival[1] < self.e and ival[1] > self.s:
+            return "LEFTOVERLAP"
+        if ival[0] > self.s and ival[0] < self.e and ival[1] > self.e:
+            return "RIGHTOVERLAP"
+
+
+def get_base_count(exons, bp, forward):
     bases = 0
     if forward:
         for e in exons:
@@ -61,19 +91,25 @@ def main(argc, argv):
                 if chr2 not in valid_chrs:
                     continue
 
-            pos1 = int(fields[1])
-            pos2 = int(fields[4])
+
+            s1 = int(fields[1])
+            e1 = int(fields[2])
+
+            s2 = int(fields[4])
+            e2 = int(fields[5])
+
             genotype = fields[7]
             sv_type = fields[6]
             
             if len(fields) > 10:
                 t1= fields[10]
                 t2 = fields[11]
-                
-                fusions.append( (g1,g2,chr1,chr2,pos1,pos2,genotype,sv_type,True,t1,t2))
+                fusions.append( (g1,g2,ginterval(chr1,s1,e1),ginterval(chr2,s2,e2),genotype,sv_type,True,t1,t2))
+                #fusions.append( (g1,g2,chr1,chr2,pos1,pos2,genotype,sv_type,True,t1,t2))
 #22 24806290 24806291 22 26467150 26467151 inversion 1/0 ENSG00000167037 ENSG00000100099
             else:
-                fusions.append( (g1,g2,chr1,chr2,pos1,pos2,genotype,sv_type,False))
+                fusions.append( (g1,g2,ginterval(chr1,s1,e1),ginterval(chr2,s2,e2),genotype,sv_type,False))
+                #fusions.append( (g1,g2,chr1,chr2,pos1,pos2,genotype,sv_type,False))
             fusion_genes[g1] = fusions[-1] 
             fusion_genes[g2] = fusions[-1]
 
@@ -173,9 +209,9 @@ def main(argc, argv):
 
                 s1 = gene_to_strand[g1]
                 s2 = gene_to_strand[g2]
-                if f[8]:
-                    max_depth_transcript1 = f[9]
-                    seqtup = fused_seqs[f[9]]
+                if f[6]:
+                    max_depth_transcript1 = f[7]
+                    seqtup = fused_seqs[f[7]]
 
                     sum_dep1 = 0
                     for t in t1l:
@@ -196,9 +232,9 @@ def main(argc, argv):
                             max_depth1 = depth
                             max_depth_transcript1 = t
 
-                if f[8] and f[10] in fused_seqs:
-                    max_depth_transcript2 = f[10]
-                    seqtup = fused_seqs[f[10]]
+                if f[6] and f[8] in fused_seqs:
+                    max_depth_transcript2 = f[8]
+                    seqtup = fused_seqs[f[8]]
                     max_depth2 = seqtup[2]
 
                 else:
@@ -218,10 +254,10 @@ def main(argc, argv):
                 exons1 = sorted(transcript_to_exons[max_depth_transcript1],key=lambda x: x[1]) #Sort by start pos of exons since - strand exons will be reversely sorted
                 exons2 = sorted(transcript_to_exons[max_depth_transcript2],key=lambda x: x[1])
 
-                breakpoint1 = f[4]
-                breakpoint2 = f[5]
-                chr1 = f[2]
-                chr2 = f[3]
+                breakpoint1 = f[2].s
+                breakpoint2 = f[3].s
+                chr1 = f[2].c
+                chr2 = f[3].c
 
                 fusion_sequence = ""
 
@@ -254,7 +290,7 @@ def main(argc, argv):
                         fusion_sequence += fused_seqs[max_depth_transcript1][1][-bases2:]
 
 
-                if f[6] == "r/t":
+                if f[4] == "r/t":
                     max_depth1 = int( max_depth1 * RT_EXPRESS_RATIO) + 1
                     transcript_id_base = "RTHT"
                     gene_id_base = "RTHG"
