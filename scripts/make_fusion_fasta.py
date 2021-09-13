@@ -172,7 +172,7 @@ def main(argc, argv):
             depth_str = hfil[1][6:]
             depth = int(depth_str)
             gene = hfil[4][5:20]
-            if True:#gene in fusion_genes:
+            if gene in fusion_genes:
                 #print(header.rstrip(),"to_fuse",sep="\t",file=whand)
                 #print(seq.rstrip(),file=whand)
                 fused_seqs[transcript] = (header,seq,depth,gene)
