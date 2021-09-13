@@ -6,6 +6,15 @@ seed:
     42
 
 samples:
+    ERR3588905:
+        reads: samples/ERR3588905.fastq # This is where you should put the reads OR
+        SRA: ERR3588905                 #    add SRA ID here to for Snakemake to download the reads to the path specified by reads
+        ref: drosophila_melanogaster  # The ref must match the refs fields below
+        degradation_level: non        # The degradation_level must match the degradation_level fields below
+        chroms: # specify the name of contigs to simulate; add All_chroms to include all chroms
+            - All_chroms
+        genes:  # specify the ENSEMBL ID or gene name to simulate; add All_genes to include all chroms
+            - All_genes
     22Rv1:
         reads:
             - samples/P000R000.pass.fastq
@@ -19,7 +28,7 @@ samples:
             - All_genes
         fusionsim:
             fusion_info:
-                ref/fusion/fusion_info.tsv
+                refs/fusion/fusion_info.tsv
             random_pair_ratio:
                 0.01
 
@@ -59,7 +68,12 @@ refs:
         annot.gtf : http://ftp.ensembl.org/pub/release-97/gtf/homo_sapiens/Homo_sapiens.GRCh38.97.gtf.gz
         dna_contig_filter:
             - dna:scaffold # ignore dna contigs with this tag, useful to keep only fully assembled contigs
-
+    drosophila_melanogaster:
+        dna.fa    : http://ftp.ensembl.org/pub/release-97/fasta/drosophila_melanogaster/dna/Drosophila_melanogaster.BDGP6.22.dna.toplevel.fa.gz
+        cdna.fa   : http://ftp.ensembl.org/pub/release-97/fasta/drosophila_melanogaster/cdna/Drosophila_melanogaster.BDGP6.22.cdna.all.fa.gz
+        annot.gtf : http://ftp.ensembl.org/pub/release-97/gtf/drosophila_melanogaster/Drosophila_melanogaster.BDGP6.22.97.gtf.gz
+        dna_contig_filter:
+            - dna:scaffold 
 badread:
     batches    : 64
     url        : https://github.com/baraaorabi/Badread.git

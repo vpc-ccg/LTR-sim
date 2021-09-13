@@ -42,7 +42,7 @@ rule all:
             dir=reads_d, 
             s=s, 
             dl=config['samples'][s]['degradation_level'],
-            runtype="L",#R to introduce random pairings
+            runtype="L",
             ext=ext,
             )
             for s in config['samples'] for ext in ['fastq','tsv']],
@@ -297,7 +297,8 @@ rule add_poly_A:
         'conda.env'
     input:
         polyA = config['exec']['polyA'],
-        cdna  = '{}/{{sample}}.cdna.fused.fasta'.format(reads_d),
+        cdna  = lambda wildcards: '{}/{{sample}}.cdna.{}fasta'.\
+            format(reads_d, 'fused.' if 'fusionsim' in config['samples'][wildcards.sample] else ''),
     output:
         cdna_A = '{}/{{sample}}.cdna.polyA.fasta'.format(reads_d)
     params:
@@ -423,11 +424,18 @@ rule shuffle_reads:
     shell:
         "cat {input.fastq} | seqkit shuffle -j15 > {output.fastq}"
 
+#If fusion is not required for the sample, return gtf so dependencies are fulfilled.
+def get_fuse_index(wildcards):
+    if 'fusionsim' in config['samples'][wildcards.sample]:
+        return '{}/{{sample}}.cdna.fused.tsv'.format(reads_d)
+    else:
+        return 'refs/{s}/{s}.annot.gtf'.format(s=config['samples'][wildcards.sample]['ref'])
+
 rule reads_info:
     input:
         fastqs = ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{}.reads.fastq'.format(batches_d,x) for x in range(int(config["badread"]["batches"]))],
         gtf  = lambda wildcards: 'refs/{s}/{s}.annot.gtf'.format(s=config['samples'][wildcards.sample]['ref']),
-        fus_index  = '{}/{{sample}}.cdna.fused.tsv'.format(reads_d),
+        fus_index  = get_fuse_index,
     output:
         tsv   = '{}/{{sample}}.L-{{degradation_level}}.tsv'.format(reads_d),
         fastq = '{}/{{sample}}.L-{{degradation_level}}.fastq'.format(reads_d),
@@ -445,10 +453,12 @@ rule reads_info:
             non={f:'NA' for f in t_headers}
         )
 
-        for line in open(input.fus_index):
-            line = line.rstrip()
-            fields = line.split('\t')
-            tid_to_info[fields[1]] = { x:y for x,y in zip(t_headers,fields)}
+        if 'fusionsim' in config['samples'][wildcards.sample]:
+            for line in open(input.fus_index):
+                line = line.rstrip()
+                fields = line.split('\t')
+                tid_to_info[fields[1]] = { x:y for x,y in zip(t_headers,fields)}
+        
         for line in open(input.gtf):
             if line[0] == '#':
                 continue
