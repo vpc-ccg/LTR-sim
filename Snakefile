@@ -26,7 +26,7 @@ batches_d = '{}/batches'.format(reads_d)
 not_preset_samples = list()
 for s in config['samples']:
     if not os.path.exists('{}/{}.expression_rate.tsv'.format(train_d, s)):
-        not_preset_samples.append(not_preset_samples)
+        not_preset_samples.append(s)
 print(not_preset_samples)
 
 localrules:
@@ -38,13 +38,15 @@ rule all:
         expand('refs/{species}/{species}.{ref_type}',
             species=config['refs'], 
             ref_type=['annot.gtf', 'cdna.fa', 'dna.fa', 'cdna.fa.fai', 'dna.fa.fai']),
-        ['{dir}/{s}.L-{dl}.{ext}'.format(
+        ['{dir}/{s}.{runtype}-{dl}.{ext}'.format(
             dir=reads_d, 
             s=s, 
             dl=config['samples'][s]['degradation_level'],
+            runtype="L",#R to introduce random pairings
             ext=ext,
             )
             for s in config['samples'] for ext in ['fastq','tsv']],
+
 
 rule git_badread:
     output:
@@ -141,6 +143,8 @@ rule index_ref:
 rule sra_download:
     conda:
         'conda.env'
+    wildcard_constraints:
+        sample = "$^|"  + '|'.join(re.escape(s) for s in config['samples'] if 'SRA' in config['samples'][s]),
     output:
         reads  = 'samples/{sample}.fastq',
     params:
@@ -244,10 +248,10 @@ rule sim_transcriptome:
                 line = line.split()
                 tid = line[0].split('.')[0]
                 if not tid in tid_to_rcnt:
-                    flag = False
-                    continue
+                    cnt = 0
+                else:
+                    cnt = tid_to_rcnt[tid]
                 flag = True
-                cnt = tid_to_rcnt[tid]
                 record = [tid, 'depth={}'.format(cnt)] + line[1:]
                 print('>{}'.format(' '.join(record)), file=outfile)
             elif flag:
@@ -256,12 +260,44 @@ rule sim_transcriptome:
             print(''.join(seq), file=outfile)
         outfile.close()
 
+#rule prep_rt_tsv:
+#    input:
+#        make_rt=config["exec"]["makert"],
+#        rt_file=config["fusionsim"]["rtfile"],
+#        gtf  = lambda wildcards: 'refs/{s}/{s}.annot.gtf'.format(s=config['samples'][wildcards.sample]['ref']),
+#    output:
+#        tsv  = '{}/{{sample}}.rt.tsv'.format(reads_d),
+#    shell:
+#        "PYTHONHASHSEED=0 python {input.make_rt} {input.rt_file} {input.gtf} {output.tsv}"
+#rule merge_fusion_and_rt_tsv:
+#    input:
+#        fus = config['fusionsim']['fusion_info'],
+#        rt = '{}/{{sample}}.rt.tsv'.format(reads_d),
+#    output:
+#        '{}/{{sample}}.fusion_and_rt.tsv'.format(reads_d),
+#    shell:
+#        "cat {input.fus} {input.rt} > {output}"
+
+rule fuse_genes:
+    input:
+        make_fusions = config['exec']['fuser'],
+        cdna  = '{}/{{sample}}.cdna.fasta'.format(reads_d),
+        gtf  = lambda wildcards: 'refs/{s}/{s}.annot.gtf'.format(s=config['samples'][wildcards.sample]['ref']),
+        fusion_info =  lambda wildcards: '{s}'.format(s=config['samples'][wildcards.sample]['fusionsim']['fusion_info']),
+    output:
+        cdna  = '{}/{{sample}}.cdna.fused.fasta'.format(reads_d),
+        fus_index  = '{}/{{sample}}.cdna.fused.tsv'.format(reads_d),
+    params:
+        valid_chrs = lambda wildcards: "All" if "All_chroms" in  config ['samples'][wildcards.sample] ["chroms"] else  ",".join([str(x) for x in config ['samples'][wildcards.sample] ["chroms"]])
+    shell:
+        'PYTHONHASHSEED=0 python3 {input.make_fusions} {input.cdna}'
+        ' {input.gtf} {input.fusion_info} {output.cdna} {output.fus_index} {params.valid_chrs}'
 rule add_poly_A:
     conda:
         'conda.env'
     input:
         polyA = config['exec']['polyA'],
-        cdna  = '{}/{{sample}}.cdna.fasta'.format(reads_d),
+        cdna  = '{}/{{sample}}.cdna.fused.fasta'.format(reads_d),
     output:
         cdna_A = '{}/{{sample}}.cdna.polyA.fasta'.format(reads_d)
     params:
@@ -276,6 +312,7 @@ rule add_poly_A:
         '   {params.mean} {params.stddev}'
         '   {params.mincut} {params.maxcut}'
         '   {params.seed}'
+
 
 rule degrade:
     conda:
@@ -357,16 +394,40 @@ rule batched_generate_reads:
         bid='|'.join([str(b) for b in range(config['badread']['batches'])])
     params:
         seed     = config['seed'],
+        other_params = " --forward_strand 0"
     shell:
-        'PYTHONHASHSEED=0 {input.badread} simulate --seed {params.seed} --length 100000,0'
+        'PYTHONHASHSEED=0 {input.badread} simulate {params.other_params} --seed {params.seed} --length 100000,0'
         '   --reference {input.cdna_A_degraded} --quantity $(cat {input.cdna_A_degraded_cov})x'
         '   --chimeras 0 --random_reads 0 --junk_reads 0 --glitches 0,0,0'
         '   > {output.fastq}'
+
+rule randomly_pair:
+    input:
+        fastq  = '{}/{{sample}}.S-{{degradation_level}}.fastq'.format(reads_d),
+        script = config["exec"]["randomly_pair"],
+    output:
+        fastq = '{}/{{sample}}.R-{{degradation_level}}.fastq'.format(reads_d),
+        index = '{}/{{sample}}.R-{{degradation_level}}.fastq.rpindex'.format(reads_d),
+    params:
+        pair_ratio =  lambda wildcards: 'refs/{s}/{s}.annot.gtf'.format(s=config['samples'][wildcards.sample]['fusionsim']["random_pair_ratio"]),
+    shell:
+        "python {input.script} {input.fastq} {params.pair_ratio} {output.fastq} {output.index}"
+    
+rule shuffle_reads:
+    input:
+       fastq = '{}/{{sample}}.L-{{degradation_level}}.fastq'.format(reads_d) 
+    output:
+       fastq = '{}/{{sample}}.S-{{degradation_level}}.fastq'.format(reads_d)
+    threads:
+        15
+    shell:
+        "cat {input.fastq} | seqkit shuffle -j15 > {output.fastq}"
 
 rule reads_info:
     input:
         fastqs = ['{}/{{sample}}.cdna.polyA.degraded-{{degradation_level}}/batch-{}.reads.fastq'.format(batches_d,x) for x in range(int(config["badread"]["batches"]))],
         gtf  = lambda wildcards: 'refs/{s}/{s}.annot.gtf'.format(s=config['samples'][wildcards.sample]['ref']),
+        fus_index  = '{}/{{sample}}.cdna.fused.tsv'.format(reads_d),
     output:
         tsv   = '{}/{{sample}}.L-{{degradation_level}}.tsv'.format(reads_d),
         fastq = '{}/{{sample}}.L-{{degradation_level}}.fastq'.format(reads_d),
@@ -383,6 +444,11 @@ rule reads_info:
         tid_to_info = dict(
             non={f:'NA' for f in t_headers}
         )
+
+        for line in open(input.fus_index):
+            line = line.rstrip()
+            fields = line.split('\t')
+            tid_to_info[fields[1]] = { x:y for x,y in zip(t_headers,fields)}
         for line in open(input.gtf):
             if line[0] == '#':
                 continue

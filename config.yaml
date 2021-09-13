@@ -1,33 +1,39 @@
 outpath:
     output
 
+
 seed:
     42
 
 samples:
-   ERR3588905:
-        reads: samples/ERR3588905.fastq # This is where you should put the reads OR
-        SRA: ERR3588905                 #    add SRA ID here to for Snakemake to download the reads to the path specified by reads
-        ref: drosophila_melanogaster  # The ref must match the refs fields below
-        degradation_level: non        # The degradation_level must match the degradation_level fields below
-        chroms: # specify the name of contigs to simulate; add All_chroms to include all chroms
-            - All_chroms
-        genes:  # specify the ENSEMBL ID or gene name to simulate; add All_genes to include all chroms
-            - All_genes
-   22Rv1:
-        reads: samples/22Rv1.fastq
+    22Rv1:
+        reads:
+            - samples/P000R000.pass.fastq
+            - samples/P000R001.pass.fastq
+            - samples/P000R002.pass.fastq
         ref: homo_sapiens
         degradation_level: non
         chroms:
-            - All_chroms
+            [1, 7, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19, 21, 22, "X"] # All_chroms
         genes:
             - All_genes
+        fusionsim:
+            fusion_info:
+                ref/fusion/fusion_info.tsv
+            random_pair_ratio:
+                0.01
 
 exec:
-    polyA      : scripts/polyA.py
+    polyA        : scripts/polyA.py
     degrade    : scripts/degradation.py
     split_file : scripts/split_file.py
+    fuser     : scripts/make_fusion_fasta.py
+    makert     : scripts/readthrough_genes_to_tsv.py
+    randomly_pair : scripts/make_random_pairings.py
     badread    : extern/Badread/badread-runner.py
+
+
+
 
 degradation_level:
     non:
@@ -41,7 +47,7 @@ degradation_level:
         intercept : 300
 
 polyA_config:
-    mean   : 60
+    mean     : 60
     stddev : 20
     mincut : 20
     maxcut : 150
@@ -49,18 +55,12 @@ polyA_config:
 refs:
     homo_sapiens:
         dna.fa    : http://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
-        cdna.fa   : http://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz
+        cdna.fa     : http://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz
         annot.gtf : http://ftp.ensembl.org/pub/release-97/gtf/homo_sapiens/Homo_sapiens.GRCh38.97.gtf.gz
         dna_contig_filter:
             - dna:scaffold # ignore dna contigs with this tag, useful to keep only fully assembled contigs
-    drosophila_melanogaster:
-        dna.fa    : http://ftp.ensembl.org/pub/release-97/fasta/drosophila_melanogaster/dna/Drosophila_melanogaster.BDGP6.22.dna.toplevel.fa.gz
-        cdna.fa   : http://ftp.ensembl.org/pub/release-97/fasta/drosophila_melanogaster/cdna/Drosophila_melanogaster.BDGP6.22.cdna.all.fa.gz
-        annot.gtf : http://ftp.ensembl.org/pub/release-97/gtf/drosophila_melanogaster/Drosophila_melanogaster.BDGP6.22.97.gtf.gz
-        dna_contig_filter:
-            - dna:scaffold 
 
 badread:
-    batches  : 64
-    url      : https://github.com/baraaorabi/Badread.git
-    tag      : v0.1.5
+    batches    : 64
+    url        : https://github.com/baraaorabi/Badread.git
+    tag        : v0.1.5
