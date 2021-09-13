@@ -203,6 +203,8 @@ rule sim_transcriptome:
     run:
         print('Simulating transcriptome from \n{}'.format(input))
         
+        to_be_fused = 'fusionsim' in config['samples'][wildcards.sample]
+
         genes = set([str(g) for g in config['samples'][wildcards.sample]['genes']])
         chroms = set([str(c) for c in config['samples'][wildcards.sample]['chroms']])
         any_chrom = 'All_chroms' in chroms
@@ -248,7 +250,11 @@ rule sim_transcriptome:
                 line = line.split()
                 tid = line[0].split('.')[0]
                 if not tid in tid_to_rcnt:
-                    cnt = 0
+                    if not to_be_fused:
+                        flag = False
+                        continue
+                    else:
+                        cnt = 0
                 else:
                     cnt = tid_to_rcnt[tid]
                 flag = True
